@@ -1,5 +1,9 @@
 # Azure Local VM Hydration & Reconnect
 
+![Azure Local VM Hydration — Revive. Reconnect. Reclaim.](assets/images/azurelocal-vm-hydration-banner.svg)
+
+> *Revive. Reconnect. Reclaim.*
+
 !!! warning "Private Preview"
     This tooling is based on Microsoft's Private Preview VM Reconnection feature for Azure Local.
     Scripts and procedures are subject to change as the feature moves toward general availability.
