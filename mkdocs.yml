@@ -1,8 +1,8 @@
-site_name: Azure Local Hydration
-site_description: Server hydration tooling for onboarding physical and existing servers into Azure Local
-site_url: https://azurelocal.github.io/azurelocal-hydration/
-repo_url: https://github.com/AzureLocal/azurelocal-hydration
-repo_name: AzureLocal/azurelocal-hydration
+site_name: Azure Local VM Hydration
+site_description: PowerShell automation for adopting existing Hyper-V VMs into Azure Local management — without re-imaging or Sysprepping.
+site_url: https://azurelocal.github.io/azurelocal-vm-hydration/
+repo_url: https://github.com/AzureLocal/azurelocal-vm-hydration
+repo_name: AzureLocal/azurelocal-vm-hydration
 
 theme:
   name: material

@@ -71,7 +71,7 @@ Copy `config/variables.example.yml` to `config/variables.yml` and fill in your e
 
 ## Documentation
 
-Full documentation: [https://azurelocal.github.io/azurelocal-hydration/](https://azurelocal.github.io/azurelocal-hydration/)
+Full documentation: [https://azurelocal.github.io/azurelocal-vm-hydration/](https://azurelocal.github.io/azurelocal-vm-hydration/)
 
 ---
 
