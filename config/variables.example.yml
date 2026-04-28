@@ -1,19 +1,46 @@
 # =============================================================================
-# Central Variable Reference — azurelocal-hydration
+# Central Variable Reference — azurelocal-vm-hydration
 # =============================================================================
 # Copy this file to variables.yml and fill in your values.
 # DO NOT commit variables.yml — it is .gitignore'd.
-#
-# All secrets use keyvault:// URIs — resolved at deploy time via Key Vault.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Subscription & Global
+# Azure Subscription & Global
 # -----------------------------------------------------------------------------
 subscription:
   subscription_id: "00000000-0000-0000-0000-000000000000"
   tenant_id: "00000000-0000-0000-0000-000000000000"
   location: "eastus"
+
+# -----------------------------------------------------------------------------
+# Azure Local Cluster (destination cluster for hydration / reconnect)
+# -----------------------------------------------------------------------------
+azure_local:
+  # Full ARM URI of the custom location — found in Azure portal under the cluster
+  custom_location_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/<rg>/providers/microsoft.extendedlocation/customlocations/<cl-name>"
+
+  # ARM resource ID of the storage path (cluster shared volume) to use
+  storage_path_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/<rg>/providers/Microsoft.AzureStackHCI/storageContainers/<storage-name>"
+
+  # Logical network name for NIC creation (the lnet resource name)
+  logical_network_name: "lnet-prod-vlan10"
+
+# -----------------------------------------------------------------------------
+# Hydration Defaults (used by Invoke-VMHydration.ps1)
+# -----------------------------------------------------------------------------
+hydration:
+  resource_group: "rg-azlocal-prod"
+  os_type: "windows"           # windows | linux
+  hyper_v_generation: "V2"     # V1 | V2
+
+# -----------------------------------------------------------------------------
+# Reconnect Defaults (used by Invoke-VMReconnect.ps1)
+# -----------------------------------------------------------------------------
+reconnect:
+  resource_group: "rg-azlocal-prod"
+  # Original cluster custom location (source) — only needed if different from azure_local above
+  source_custom_location_id: ""
 
 # -----------------------------------------------------------------------------
 # Security — Key Vault

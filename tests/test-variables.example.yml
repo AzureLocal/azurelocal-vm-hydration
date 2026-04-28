@@ -1,0 +1,40 @@
+# =============================================================================
+# Test Variable Reference — azurelocal-vm-hydration
+# =============================================================================
+# Copy this file to tests/test-variables.yml and fill in your values.
+# DO NOT commit test-variables.yml — it is .gitignore'd.
+#
+# These are SEPARATE from config/variables.yml — use a dedicated test resource
+# group so test runs never touch production resources.
+# =============================================================================
+
+test:
+  # Azure resource group for test resources — must exist before running tests
+  # Recommend a dedicated RG: rg-azlocal-test or rg-hydration-test
+  resource_group: "rg-azlocal-test"
+
+  # Azure region
+  location: "eastus"
+
+  # Full ARM URI of the custom location for the TEST Azure Local cluster
+  custom_location_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/<rg>/providers/microsoft.extendedlocation/customlocations/<cl-name>"
+
+  # ARM resource ID of the storage path on the test cluster
+  storage_path_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/<rg>/providers/Microsoft.AzureStackHCI/storageContainers/<name>"
+
+  # Local filesystem root of the cluster shared volume on the test cluster node
+  # Example: C:\ClusterStorage\Volume1
+  storage_root_path: "C:\\ClusterStorage\\Volume1"
+
+  # Logical network name for test NICs
+  logical_network_name: "lnet-test-vlan10"
+
+  # Prefix for test VM names — VMs are named <prefix>-<timestamp>
+  vm_name_prefix: "test-hydration"
+
+  # VHD size in GB for test VMs — keep small for fast setup
+  vhd_size_gb: 8
+
+  # Temporary export path used by the reconnect test scenario setup
+  # Must be writable by the cluster node
+  export_path: "C:\\Temp\\HydrationTestExport"

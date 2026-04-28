@@ -1,17 +1,38 @@
-# Azure Local Hydration
+# Azure Local VM Hydration & Reconnect
 
-!!! warning "Under Active Development"
-    This repository is a work in progress. Scripts, templates, and automation are **not guaranteed to work** at this time. Use at your own risk and expect breaking changes.
+!!! warning "Private Preview"
+    This tooling is based on Microsoft's Private Preview VM Reconnection feature for Azure Local.
+    Scripts and procedures are subject to change as the feature moves toward general availability.
 
-Server hydration tooling for onboarding physical and existing servers into Azure Local.
+PowerShell automation for two related Azure Local VM operations:
 
-## Documentation
+## VM Hydration
 
-- [Getting Started](getting-started.md)
-- [Roadmap](roadmap.md)
-- [Contributing](contributing.md)
+Takes an existing, unmanaged Hyper-V VM running on an Azure Local cluster and brings it under Azure Local management — without re-imaging, Sysprepping, or disrupting the workload.
+
+The VM becomes a `Microsoft.AzureStackHCI/virtualMachineInstances` resource, fully manageable from the Azure portal, with lifecycle operations (start/stop, disk attach, extensions, policy).
+
+**Script:** `scripts/Invoke-VMHydration.ps1`
+
+## VM Reconnect
+
+Reconnects an Azure Local VM to its Azure resource after the VM has been restored to a *different* Azure Local cluster (e.g. via Veeam backup restore, export/import). The Azure resource becomes orphaned after such a restore; this script re-projects it onto the destination cluster.
+
+**Script:** `scripts/Invoke-VMReconnect.ps1`
+
+---
+
+## What "Hydration" Means
+
+In this context, **hydration** refers to registering a locally-hosted VHD/VHDX file as an Azure-managed disk resource — making it visible and manageable in Azure without moving the data. This is the core operation that underpins both scenarios above.
+
+The term comes from Microsoft's own naming (`HydrationSupport@microsoft.com`, `az stack-hci-vm disk create-from-local`).
+
+---
 
 ## Related
 
+- [Getting Started](getting-started.md)
+- [Roadmap](roadmap.md)
 - [AzureLocal Solutions](https://azurelocal.cloud)
-- [GitHub Repository](https://github.com/AzureLocal/azurelocal-hydration)
+- [GitHub Repository](https://github.com/AzureLocal/azurelocal-vm-hydration)

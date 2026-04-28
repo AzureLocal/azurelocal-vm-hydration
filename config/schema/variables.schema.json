@@ -1,24 +1,50 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "azurelocal-hydration Variable Schema",
+  "title": "azurelocal-vm-hydration Variable Schema",
   "type": "object",
   "properties": {
     "subscription": {
       "type": "object",
       "properties": {
         "subscription_id": { "type": "string" },
-        "tenant_id": { "type": "string" },
-        "location": { "type": "string" }
+        "tenant_id":        { "type": "string" },
+        "location":         { "type": "string" }
       },
       "required": ["subscription_id", "tenant_id", "location"]
+    },
+    "azure_local": {
+      "type": "object",
+      "properties": {
+        "custom_location_id":   { "type": "string" },
+        "storage_path_id":      { "type": "string" },
+        "logical_network_name": { "type": "string" }
+      },
+      "required": ["custom_location_id", "storage_path_id", "logical_network_name"]
+    },
+    "hydration": {
+      "type": "object",
+      "properties": {
+        "resource_group":     { "type": "string" },
+        "os_type":            { "type": "string", "enum": ["windows", "linux"] },
+        "hyper_v_generation": { "type": "string", "enum": ["V1", "V2"] }
+      },
+      "required": ["resource_group"]
+    },
+    "reconnect": {
+      "type": "object",
+      "properties": {
+        "resource_group":           { "type": "string" },
+        "source_custom_location_id": { "type": "string" }
+      },
+      "required": ["resource_group"]
     },
     "security": {
       "type": "object",
       "properties": {
-        "key_vault_name": { "type": "string" },
+        "key_vault_name":           { "type": "string" },
         "key_vault_resource_group": { "type": "string" }
       }
     }
   },
-  "required": ["subscription"]
+  "required": ["subscription", "azure_local"]
 }

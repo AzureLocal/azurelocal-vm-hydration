@@ -1,5 +1,6 @@
 # Variables (never commit real values)
 config/variables.yml
+tests/test-variables.yml
 *.tfvars
 *.env
 *.secrets
@@ -10,3 +11,7 @@ site/
 # OS
 .DS_Store
 Thumbs.db
+
+# Reference files
+reference/
+references/

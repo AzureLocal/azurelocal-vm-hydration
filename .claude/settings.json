@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(az *)",
+      "Bash(mkdocs *)",
+      "Bash(pip install *)",
+      "Bash(pwsh -NonInteractive -Command *)",
+      "Bash(powershell.exe -NonInteractive -Command *)"
+    ]
+  }
+}
