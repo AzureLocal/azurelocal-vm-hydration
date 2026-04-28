@@ -1,0 +1,19 @@
+# AzureLocal platform metadata
+# Schema: https://azurelocal.github.io/platform/reference/platform-metadata/
+
+platformVersion: 1
+repoType: solution
+
+solution: vm-hydration
+
+adopts:
+  standards: true
+  reusableWorkflows:
+    - release-please
+    - validate-structure
+    - add-to-project
+    - deploy-docs
+  maproom: false
+  trailhead: false
+
+lastAudited: 2026-04-28

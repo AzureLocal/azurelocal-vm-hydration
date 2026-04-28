@@ -1,5 +1,9 @@
 # azurelocal-vm-hydration
 
+![Azure Local VM Hydration](docs/assets/images/azurelocal-vm-hydration-banner.svg)
+
+> *Revive. Reconnect. Reclaim.*
+
 PowerShell automation for adopting existing Hyper-V VMs into **Azure Local** management — without re-imaging or Sysprepping.
 
 Covers two scenarios:

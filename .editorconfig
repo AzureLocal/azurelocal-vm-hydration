@@ -1,0 +1,28 @@
+# AzureLocal canonical editor config
+# Distributed to every repo via Sync-CommonFiles.ps1
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# ── PowerShell — 4 spaces per org standard ────────────────────────────
+[*.{ps1,psm1,psd1}]
+indent_size = 4
+
+# ── Python (MkDocs plugins, scripts) ──────────────────────────────────
+[*.py]
+indent_size = 4
+
+# ── Markdown — preserve trailing spaces for line breaks ───────────────
+[*.md]
+trim_trailing_whitespace = false
+
+# ── Makefiles need tabs ───────────────────────────────────────────────
+[Makefile]
+indent_style = tab
