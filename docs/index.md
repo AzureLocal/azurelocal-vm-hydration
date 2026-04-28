@@ -30,7 +30,7 @@ Reconnects an Azure Local VM to its Azure resource after the VM has been restore
 
 In this context, **hydration** refers to registering a locally-hosted VHD/VHDX file as an Azure-managed disk resource — making it visible and manageable in Azure without moving the data. This is the core operation that underpins both scenarios above.
 
-The term comes from Microsoft's own naming (`HydrationSupport@microsoft.com`, `az stack-hci-vm disk create-from-local`).
+The term comes from Microsoft's own naming of the underlying CLI command: `az stack-hci-vm disk create-from-local`.
 
 ---
 
