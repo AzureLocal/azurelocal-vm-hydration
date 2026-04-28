@@ -6,6 +6,8 @@ repo_name: AzureLocal/azurelocal-vm-hydration
 
 theme:
   name: material
+  logo: assets/images/azurelocal-vm-hydration-icon.svg
+  favicon: assets/images/azurelocal-vm-hydration-icon.svg
   palette:
     - scheme: default
       primary: blue
