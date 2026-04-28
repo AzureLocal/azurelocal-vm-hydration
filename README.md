@@ -1,6 +1,13 @@
 # azurelocal-vm-hydration
 
-![Azure Local VM Hydration](docs/assets/images/azurelocal-vm-hydration-banner.svg)
+![Azure Local VM Hydration — Revive. Reconnect. Reclaim.](docs/assets/images/azurelocal-vm-hydration-banner.svg)
+
+[![Azure Local](https://img.shields.io/badge/Azure%20Local-azurelocal.cloud-0078D4?logo=microsoft-azure)](https://azurelocal.cloud)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Docs: MkDocs Material](https://img.shields.io/badge/docs-MkDocs%20Material-0f766e)](docs/index.md)
+[![PowerShell: 7.x](https://img.shields.io/badge/PowerShell-7.x-3b82f6)](https://github.com/PowerShell/PowerShell)
+
+Documentation: [azurelocal.cloud](https://azurelocal.cloud) | Solutions: [Azure Local Solutions](https://azurelocal.cloud)
 
 > *Revive. Reconnect. Reclaim.*
 
@@ -66,12 +73,6 @@ Both scripts support `-WhatIf` for dry runs.
 ## Configuration
 
 Copy `config/variables.example.yml` to `config/variables.yml` and fill in your environment values. `variables.yml` is gitignored — never commit it.
-
----
-
-## Documentation
-
-Full documentation: [https://azurelocal.github.io/azurelocal-vm-hydration/](https://azurelocal.github.io/azurelocal-vm-hydration/)
 
 ---
 
