@@ -158,6 +158,173 @@ function Wait-ForAzureResource {
 
 #endregion
 
+#region ── ISO Download and Conversion ───────────────────────────────────────
+
+function Get-ConvertWindowsImageScript {
+    <#
+    .SYNOPSIS
+        Ensures Convert-WindowsImage.ps1 is available locally, downloading it if needed.
+    .DESCRIPTION
+        Convert-WindowsImage.ps1 is a Microsoft tool (maintained in MSLab) that converts
+        a Windows ISO to a bootable VHD/VHDX. This function caches it to avoid repeat downloads.
+    .OUTPUTS
+        [string] Path to Convert-WindowsImage.ps1, or $null on failure.
+    #>
+    param(
+        [string]$LocalPath = "$env:TEMP\Convert-WindowsImage.ps1"
+    )
+
+    if (Test-Path $LocalPath) {
+        Write-TestInfo "Convert-WindowsImage.ps1 cached at: $LocalPath"
+        return $LocalPath
+    }
+
+    $url = 'https://raw.githubusercontent.com/microsoft/MSLab/master/Tools/Convert-WindowsImage.ps1'
+    Write-TestInfo "Downloading Convert-WindowsImage.ps1 from MSLab..."
+    try {
+        $prev = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $url -OutFile $LocalPath -UseBasicParsing -ErrorAction Stop
+        $ProgressPreference = $prev
+        Write-TestInfo "Downloaded to: $LocalPath"
+        return $LocalPath
+    } catch {
+        $ProgressPreference = $prev
+        Write-TestFail "Could not download Convert-WindowsImage.ps1: $_"
+        Write-TestFail "Download manually from: $url"
+        return $null
+    }
+}
+
+function Convert-IsoToVhdx {
+    <#
+    .SYNOPSIS
+        Converts a Windows Server ISO to a bootable VHDX using Convert-WindowsImage.ps1.
+    .DESCRIPTION
+        Gen2 output: GPT/UEFI partition scheme  — attach to Hyper-V Generation 2 VM.
+        Gen1 output: MBR/BIOS partition scheme  — attach to Hyper-V Generation 1 VM.
+        Both produce a Dynamic VHDX. Reuses an existing output file if already present.
+    .OUTPUTS
+        [string] Path to the created VHDX, or $null on failure.
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$IsoPath,
+        [Parameter(Mandatory)] [string]$OutputPath,
+        [ValidateSet(1, 2)]    [int]$Generation    = 2,
+        [string]$Edition   = 'Windows Server 2022 Datacenter',
+        [int64]$SizeBytes   = 60GB,
+        [string]$ConvertScriptPath
+    )
+
+    if (-not (Test-Path $IsoPath)) {
+        Write-TestFail "ISO not found: $IsoPath"
+        return $null
+    }
+
+    if (Test-Path $OutputPath) {
+        $mb = [math]::Round((Get-Item $OutputPath).Length / 1MB)
+        Write-TestInfo "VHDX already exists (${mb} MB) — reusing: $OutputPath"
+        return $OutputPath
+    }
+
+    if (-not $ConvertScriptPath) {
+        $ConvertScriptPath = Get-ConvertWindowsImageScript
+    }
+    if (-not $ConvertScriptPath) { return $null }
+
+    Write-TestInfo "Converting ISO → VHDX (Generation $Generation, $([math]::Round($SizeBytes/1GB)) GB)"
+    Write-TestInfo "  ISO     : $IsoPath"
+    Write-TestInfo "  Output  : $OutputPath"
+    Write-TestInfo "  Edition : $Edition"
+    Write-TestWarn "This may take 5–15 minutes depending on disk speed."
+
+    try {
+        # Dot-source to bring Convert-WindowsImage into scope
+        . $ConvertScriptPath
+
+        $cwParams = @{
+            SourcePath = $IsoPath
+            VHDPath    = $OutputPath
+            VHDFormat  = 'VHDX'
+            Edition    = $Edition
+            SizeBytes  = $SizeBytes
+            VHDType    = 'Dynamic'
+        }
+
+        # Gen1 → MBR/BIOS partition scheme; Gen2 → GPT/UEFI (default)
+        if ($Generation -eq 1) {
+            $cwParams['BCDinVHD'] = 'NativeBoot'
+        }
+
+        Convert-WindowsImage @cwParams
+
+        if (Test-Path $OutputPath) {
+            $mb = [math]::Round((Get-Item $OutputPath).Length / 1MB)
+            Write-TestInfo "VHDX created (${mb} MB): $OutputPath"
+            return $OutputPath
+        }
+
+        Write-TestFail "Convert-WindowsImage completed but output file not found: $OutputPath"
+        return $null
+    } catch {
+        Write-TestFail "ISO-to-VHDX conversion failed: $_"
+        return $null
+    }
+}
+
+function Invoke-EvalIsoDownload {
+    <#
+    .SYNOPSIS
+        Downloads the Windows Server evaluation ISO from Microsoft.
+    .DESCRIPTION
+        Uses the Microsoft Evaluation Center redirect URL. The file is ~5 GB.
+        If the ISO already exists at DestinationPath it is reused without re-downloading.
+
+        Note: Microsoft periodically changes evaluation download URLs. If the default URL
+        fails, visit https://www.microsoft.com/en-us/evalcenter/download-windows-server-2022
+        to get a current direct-download link and pass it via -DownloadUrl.
+    .OUTPUTS
+        [string] Path to the downloaded ISO, or $null on failure.
+    #>
+    param(
+        [string]$DestinationPath = "$env:TEMP\WS2022_eval.iso",
+        # Default URL = Microsoft Eval Center redirect for WS2022 ISO (en-us, x64)
+        [string]$DownloadUrl = 'https://go.microsoft.com/fwlink/p/?LinkID=2195280&clcid=0x409&culture=en-us&country=US'
+    )
+
+    if (Test-Path $DestinationPath) {
+        $mb = [math]::Round((Get-Item $DestinationPath).Length / 1MB)
+        Write-TestInfo "Eval ISO already present (${mb} MB) — reusing: $DestinationPath"
+        return $DestinationPath
+    }
+
+    $dir = Split-Path $DestinationPath
+    if ($dir -and -not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
+
+    Write-TestInfo "Downloading Windows Server 2022 Evaluation ISO (~5 GB)..."
+    Write-TestInfo "URL         : $DownloadUrl"
+    Write-TestInfo "Destination : $DestinationPath"
+    Write-TestWarn "This download may take 10–30 minutes on a typical connection."
+
+    try {
+        $prev = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile $DestinationPath -UseBasicParsing -ErrorAction Stop
+        $ProgressPreference = $prev
+
+        $mb = [math]::Round((Get-Item $DestinationPath).Length / 1MB)
+        Write-TestInfo "Download complete (${mb} MB): $DestinationPath"
+        return $DestinationPath
+    } catch {
+        $ProgressPreference = $prev
+        Write-TestFail "Eval ISO download failed: $_"
+        Write-TestFail "Download manually from:"
+        Write-TestFail "  https://www.microsoft.com/en-us/evalcenter/download-windows-server-2022"
+        Write-TestFail "Then pass the path with: -IsoPath '<path-to-iso>'"
+        return $null
+    }
+}
+
+#endregion
+
 #region ── Gallery Image Resolution ──────────────────────────────────────────
 
 function Get-GalleryImagePath {

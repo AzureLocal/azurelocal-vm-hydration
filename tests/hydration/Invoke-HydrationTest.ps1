@@ -46,44 +46,66 @@
 
 .PARAMETER GalleryImageName
     Name of an Azure Local gallery (marketplace) image already downloaded to this cluster.
-    The script resolves its local VHDX path automatically and uses it as the test VM disk.
-    Takes precedence over -SourceVhdPath when both are provided.
-
-    List available images:
-        az stack-hci-vm image list --resource-group <rg> --output table
+    Resolves to the local VHDX automatically — recommended for realistic full-OS testing.
+    List available images: az stack-hci-vm image list -g <rg> --output table
 
 .PARAMETER SourceVhdPath
-    Full path to an existing Windows Server VHDX to use as the test VM disk.
-    Use this if -GalleryImageName resolution fails, or to specify an exact file.
-    If neither -GalleryImageName nor -SourceVhdPath is set, an empty VHD is created.
+    Explicit local path to a VHDX/VHD to copy into the test VM folder.
+    Use when -GalleryImageName resolution fails or you have a custom template.
+
+.PARAMETER IsoPath
+    Path to a Windows Server ISO on the cluster node. The script converts it to a
+    bootable VHDX using Convert-WindowsImage.ps1 (downloaded automatically from MSLab).
+    Use with -Generation to produce Gen1 (MBR/BIOS) or Gen2 (GPT/UEFI) output.
+
+.PARAMETER DownloadEvalIso
+    Download the Windows Server 2022 Evaluation ISO from Microsoft automatically,
+    then convert it to VHDX. Requires ~5 GB download + conversion time.
+    Override the download URL with -EvalIsoUrl if the default link has changed.
+
+.PARAMETER EvalIsoUrl
+    Override the default Microsoft evaluation ISO download URL.
+    Visit https://www.microsoft.com/en-us/evalcenter/download-windows-server-2022
+    to get a current direct-download link if the default has expired.
+
+.PARAMETER IsoEdition
+    Windows Server edition to install when converting from ISO.
+    Default: 'Windows Server 2022 Datacenter'
+    Common values:
+      'Windows Server 2022 Standard'
+      'Windows Server 2022 Standard (Desktop Experience)'
+      'Windows Server 2022 Datacenter'
+      'Windows Server 2022 Datacenter (Desktop Experience)'
 
 .PARAMETER SkipSetup
     Skip the New-HydrationTestVM step. Use when the VM already exists.
 
 .EXAMPLE
-    # Azure resource layer test (empty VHD):
-    .\Invoke-HydrationTest.ps1 `
-        -ResourceGroup   'rg-azlocal-test' `
-        -CustomLocation  '/subscriptions/.../customlocations/cl-test' `
-        -StoragePathId   '/subscriptions/.../storageContainers/UserStorage1' `
-        -StorageRootPath 'C:\ClusterStorage\Volume1' `
-        -SubnetId        'lnet-test-vlan10' `
-        -Location        'eastus'
+    # Azure resource layer test only (empty VHD, no OS needed):
+    .\Invoke-HydrationTest.ps1 -ResourceGroup 'rg-test' -CustomLocation '...' `
+        -StoragePathId '...' -StorageRootPath 'C:\ClusterStorage\csv-01' `
+        -SubnetId 'lnet-test' -Location 'eastus'
 
 .EXAMPLE
-    # Full end-to-end test with real Windows Server VHD:
-    .\Invoke-HydrationTest.ps1 `
-        -ResourceGroup   'rg-azlocal-test' `
-        -CustomLocation  '/subscriptions/.../customlocations/cl-test' `
-        -StoragePathId   '/subscriptions/.../storageContainers/UserStorage1' `
-        -StorageRootPath 'C:\ClusterStorage\Volume1' `
-        -SubnetId        'lnet-test-vlan10' `
-        -Location        'eastus' `
-        -SourceVhdPath   'C:\ClusterStorage\csv-01\ISOs\WS2022_template.vhdx'
+    # Use a marketplace image already on the cluster (recommended):
+    .\Invoke-HydrationTest.ps1 ... -GalleryImageName 'windows-server-2022-datacenter'
+
+.EXAMPLE
+    # Use an ISO already on cluster storage:
+    .\Invoke-HydrationTest.ps1 ... -IsoPath 'C:\ClusterStorage\csv-01\ISOs\WS2022.iso'
+
+.EXAMPLE
+    # Download eval ISO automatically and convert (Gen2):
+    .\Invoke-HydrationTest.ps1 ... -DownloadEvalIso
+
+.EXAMPLE
+    # Download eval ISO and test Gen1 hydration path:
+    .\Invoke-HydrationTest.ps1 ... -DownloadEvalIso -Generation 1
 
 .NOTES
-    Run on one of the Azure Local cluster nodes.
+    Run on one of the Azure Local cluster nodes as Administrator.
     Azure CLI must be authenticated (az login).
+    VHD source priority: GalleryImageName > IsoPath/DownloadEvalIso > SourceVhdPath > empty VHD.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -122,6 +144,18 @@ param(
     [string]$SourceVhdPath,
 
     [Parameter()]
+    [string]$IsoPath,
+
+    [Parameter()]
+    [switch]$DownloadEvalIso,
+
+    [Parameter()]
+    [string]$EvalIsoUrl,
+
+    [Parameter()]
+    [string]$IsoEdition = 'Windows Server 2022 Datacenter',
+
+    [Parameter()]
     [switch]$SkipClusterCheck,
 
     [Parameter()]
@@ -144,19 +178,63 @@ function Record-Pass([string]$msg) { $script:passed++; Write-TestPass $msg }
 function Record-Fail([string]$msg) { $script:failed++; $script:failures.Add($msg); Write-TestFail $msg }
 
 #region ── Resolve VHD Source ─────────────────────────────────────────────────
+# Priority: GalleryImageName > IsoPath/DownloadEvalIso > SourceVhdPath > empty VHD
 
-# Gallery image takes precedence; fall back to explicit SourceVhdPath; then empty VHD
-if ($GalleryImageName -and -not $SkipSetup) {
-    $resolvedPath = Get-GalleryImagePath `
-        -ImageName       $GalleryImageName `
-        -ResourceGroup   $ResourceGroup `
-        -StorageRootPath $StorageRootPath
-    if ($resolvedPath) {
-        $SourceVhdPath = $resolvedPath
-        Write-Host "  Using gallery image: $GalleryImageName" -ForegroundColor Cyan
-        Write-Host "  Local path         : $SourceVhdPath"    -ForegroundColor Cyan
+if (-not $SkipSetup) {
+
+    if ($GalleryImageName) {
+        # ── Option 1: Marketplace / gallery image already on the cluster
+        $resolvedPath = Get-GalleryImagePath `
+            -ImageName       $GalleryImageName `
+            -ResourceGroup   $ResourceGroup `
+            -StorageRootPath $StorageRootPath
+        if ($resolvedPath) {
+            $SourceVhdPath = $resolvedPath
+            Write-Host "  [VHD] Gallery image : $GalleryImageName" -ForegroundColor Cyan
+            Write-Host "        Local path    : $SourceVhdPath"    -ForegroundColor Cyan
+        } else {
+            Write-Host "  [WARN] Gallery image '$GalleryImageName' not resolved — check next option or use -SourceVhdPath." -ForegroundColor Yellow
+        }
+    }
+
+    if (-not $SourceVhdPath -and ($IsoPath -or $DownloadEvalIso)) {
+        # ── Option 2: ISO → convert to VHDX
+        $iso = $IsoPath
+
+        if ($DownloadEvalIso -and -not $iso) {
+            $isoFile      = Join-Path $env:TEMP 'WS2022_eval.iso'
+            $dlParams     = @{ DestinationPath = $isoFile }
+            if ($EvalIsoUrl) { $dlParams['DownloadUrl'] = $EvalIsoUrl }
+            $iso = Invoke-EvalIsoDownload @dlParams
+        }
+
+        if ($iso) {
+            $genTag  = "gen$Generation"
+            $vhdxOut = Join-Path $env:TEMP "ws2022-test-${genTag}.vhdx"
+            $cvParams = @{
+                IsoPath    = $iso
+                OutputPath = $vhdxOut
+                Generation = $Generation
+                Edition    = $IsoEdition
+            }
+            $converted = Convert-IsoToVhdx @cvParams
+            if ($converted) {
+                $SourceVhdPath = $converted
+                Write-Host "  [VHD] Converted ISO : Gen$Generation VHDX" -ForegroundColor Cyan
+                Write-Host "        Path          : $SourceVhdPath"       -ForegroundColor Cyan
+            } else {
+                Write-Host "  [WARN] ISO conversion failed — falling back to empty VHD." -ForegroundColor Yellow
+            }
+        }
+    }
+
+    if ($SourceVhdPath) {
+        # ── Option 3: Explicit path already set (from above or passed directly)
+        Write-Host "  [VHD] Source VHDX   : $SourceVhdPath" -ForegroundColor Cyan
     } else {
-        Write-Host "  [WARN] Could not resolve gallery image '$GalleryImageName' — falling back to empty VHD." -ForegroundColor Yellow
+        # ── Option 4: Empty VHD — Azure resource layer testing only
+        Write-Host "  [VHD] Mode: empty VHD (no OS) — Azure resource registration only." -ForegroundColor Yellow
+        Write-Host "        Supply -GalleryImageName, -IsoPath, -DownloadEvalIso, or -SourceVhdPath for full OS testing." -ForegroundColor Yellow
     }
 }
 

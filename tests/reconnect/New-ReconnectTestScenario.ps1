@@ -52,40 +52,53 @@
 
 .PARAMETER GalleryImageName
     Name of an Azure Local gallery (marketplace) image already downloaded to this cluster.
-    The script resolves its local VHDX path and uses it for the test VM.
-    Takes precedence over -SourceVhdPath.
-
-    List available images:
-        az stack-hci-vm image list --resource-group <rg> --output table
+    Resolves to the local VHDX automatically. Recommended for realistic full-OS testing.
+    List available images: az stack-hci-vm image list -g <rg> --output table
 
 .PARAMETER SourceVhdPath
-    Full path to an existing Windows Server VHDX to use as the VM disk.
-    Use when -GalleryImageName resolution fails or to specify an exact file.
-    If neither is set, an empty VHD is created (Azure resource layer testing only).
+    Explicit local path to a VHDX/VHD to copy into the test VM folder.
+
+.PARAMETER IsoPath
+    Path to a Windows Server ISO on the cluster node. Converted to a bootable VHDX
+    using Convert-WindowsImage.ps1 (downloaded automatically from MSLab).
+
+.PARAMETER DownloadEvalIso
+    Download the Windows Server 2022 Evaluation ISO from Microsoft (~5 GB), then convert
+    it to VHDX. Override the URL with -EvalIsoUrl if the default link has changed.
+
+.PARAMETER EvalIsoUrl
+    Override the Microsoft evaluation ISO download URL.
+
+.PARAMETER IsoEdition
+    Windows edition to install when converting from ISO.
+    Default: 'Windows Server 2022 Datacenter'
 
 .PARAMETER ExportPath
-    Temporary path for the VM export. Defaults to C:\Temp\HydrationTestExport.
-    Cleaned up automatically after re-import.
+    Temporary path for the VM export used in Phase B (simulate backup).
+    Defaults to C:\Temp\HydrationTestExport. Cleaned up after re-import.
 
 .EXAMPLE
-    # Azure resource layer test only:
+    # Azure resource layer test only (empty VHD, no OS):
     $ctx = .\New-ReconnectTestScenario.ps1 `
-        -ResourceGroup 'rg-azlocal-test' `
-        -CustomLocation '...' -StoragePathId '...' `
-        -StorageRootPath 'C:\ClusterStorage\Volume1' `
+        -ResourceGroup 'rg-azlocal-test' -CustomLocation '...' `
+        -StoragePathId '...' -StorageRootPath 'C:\ClusterStorage\csv-01' `
         -SubnetId 'lnet-test' -Location 'eastus'
 
 .EXAMPLE
-    # Full end-to-end test with a real Windows Server VHD:
-    $ctx = .\New-ReconnectTestScenario.ps1 `
-        -ResourceGroup    'rg-azlocal-test' `
-        -CustomLocation   '...' -StoragePathId '...' `
-        -StorageRootPath  'C:\ClusterStorage\Volume1' `
-        -SubnetId         'lnet-test' -Location 'eastus' `
-        -SourceVhdPath    'C:\ClusterStorage\csv-01\ISOs\WS2022_template.vhdx'
+    # Use a marketplace image already on the cluster:
+    $ctx = .\New-ReconnectTestScenario.ps1 ... -GalleryImageName 'windows-server-2022-datacenter'
+
+.EXAMPLE
+    # Convert an ISO already on cluster storage:
+    $ctx = .\New-ReconnectTestScenario.ps1 ... -IsoPath 'C:\ClusterStorage\csv-01\ISOs\WS2022.iso'
+
+.EXAMPLE
+    # Download eval ISO automatically:
+    $ctx = .\New-ReconnectTestScenario.ps1 ... -DownloadEvalIso
 
 .NOTES
-    Run on one of the Azure Local cluster nodes. Azure CLI must be authenticated.
+    Run on one of the Azure Local cluster nodes as Administrator. Azure CLI must be authenticated.
+    VHD source priority: GalleryImageName > IsoPath/DownloadEvalIso > SourceVhdPath > empty VHD.
     After setup, run Invoke-ReconnectTest.ps1.
     Run Remove-ReconnectTestResources.ps1 to clean up.
 #>
@@ -119,6 +132,18 @@ param(
     [string]$SourceVhdPath,
 
     [Parameter()]
+    [string]$IsoPath,
+
+    [Parameter()]
+    [switch]$DownloadEvalIso,
+
+    [Parameter()]
+    [string]$EvalIsoUrl,
+
+    [Parameter()]
+    [string]$IsoEdition = 'Windows Server 2022 Datacenter',
+
+    [Parameter()]
     [string]$ExportPath = 'C:\Temp\HydrationTestExport',
 
     [Parameter()]
@@ -134,19 +159,44 @@ $ScriptsDir = Join-Path (Split-Path -Parent $TestDir) 'scripts'
 . "$TestDir\helpers\Test-Common.ps1"
 
 #region ── Resolve VHD Source ─────────────────────────────────────────────────
+# Priority: GalleryImageName > IsoPath/DownloadEvalIso > SourceVhdPath > empty VHD
 
-if ($GalleryImageName -and -not $SourceVhdPath) {
+if ($GalleryImageName) {
     $resolvedPath = Get-GalleryImagePath `
         -ImageName       $GalleryImageName `
         -ResourceGroup   $ResourceGroup `
         -StorageRootPath $StorageRootPath
     if ($resolvedPath) {
         $SourceVhdPath = $resolvedPath
-        Write-Host "  Using gallery image: $GalleryImageName" -ForegroundColor Cyan
-        Write-Host "  Local path         : $SourceVhdPath"    -ForegroundColor Cyan
+        Write-Host "  [VHD] Gallery image : $GalleryImageName" -ForegroundColor Cyan
+        Write-Host "        Local path    : $SourceVhdPath"    -ForegroundColor Cyan
     } else {
-        Write-Host "  [WARN] Could not resolve gallery image '$GalleryImageName' — falling back to empty VHD." -ForegroundColor Yellow
+        Write-Host "  [WARN] Gallery image '$GalleryImageName' not resolved." -ForegroundColor Yellow
     }
+}
+
+if (-not $SourceVhdPath -and ($IsoPath -or $DownloadEvalIso)) {
+    $iso = $IsoPath
+    if ($DownloadEvalIso -and -not $iso) {
+        $isoFile  = Join-Path $env:TEMP 'WS2022_eval.iso'
+        $dlParams = @{ DestinationPath = $isoFile }
+        if ($EvalIsoUrl) { $dlParams['DownloadUrl'] = $EvalIsoUrl }
+        $iso = Invoke-EvalIsoDownload @dlParams
+    }
+    if ($iso) {
+        $vhdxOut  = Join-Path $env:TEMP 'ws2022-test-gen2.vhdx'
+        $converted = Convert-IsoToVhdx -IsoPath $iso -OutputPath $vhdxOut -Generation 2 -Edition $IsoEdition
+        if ($converted) {
+            $SourceVhdPath = $converted
+            Write-Host "  [VHD] Converted ISO : $SourceVhdPath" -ForegroundColor Cyan
+        } else {
+            Write-Host "  [WARN] ISO conversion failed — falling back to empty VHD." -ForegroundColor Yellow
+        }
+    }
+}
+
+if (-not $SourceVhdPath) {
+    Write-Host "  [VHD] Mode: empty VHD (no OS) — Azure resource registration only." -ForegroundColor Yellow
 }
 
 #endregion
