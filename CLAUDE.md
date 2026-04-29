@@ -11,12 +11,36 @@ Two operations are covered:
 - **VM Hydration** — onboarding an existing unmanaged Hyper-V VM *in place* into Azure Local management using `az stack-hci-vm disk create-from-local`
 - **VM Reconnect** — restoring a VM to a *different* Azure Local cluster and re-projecting it into Azure using `az stack-hci-vm reconnect-to-azure`
 
+This is a **two-part repo**: standalone scripts that can be run directly on a cluster node, AND a PSGallery-publishable PowerShell module. Both parts implement the same logic; the module wraps everything in proper cmdlets for `Install-Module` workflows.
+
+## PowerShell Module
+
+```text
+AzureLocalVMHydration.psm1            # Root module — dot-sources Private + Public
+AzureLocalVMHydration.psd1            # Manifest (v0.1.0, GUID 83e5c34f, PS 7.0+, PSGallery-ready)
+Modules/
+├── Private/
+│   ├── Common-Functions.ps1          # Write-Step/OK/Warn/Fail, Invoke-AzCli, Invoke-ArmRestApi,
+│   │                                 #   Assert-AdminElevation
+│   └── Test-HydrationPrerequisites.ps1  # Internal 10-check pre-flight (returns List[string])
+└── Public/
+    ├── Invoke-VMHydration.ps1        # Exported: hydrate unmanaged VM in-place (Gen1 + Gen2)
+    ├── Invoke-VMReconnect.ps1        # Exported: reconnect VM after cross-cluster restore
+    └── Test-VMHydrationPrerequisites.ps1  # Exported: bool-returning pre-flight wrapper
+```
+
+Exported functions: `Invoke-VMHydration`, `Invoke-VMReconnect`, `Test-VMHydrationPrerequisites`
+
+Module uses `Assert-AdminElevation` (throws if not elevated) instead of `#Requires -RunAsAdministrator`.
+Module uses `throw` instead of `exit 1` — appropriate for module error handling.
+Both cmdlets support `-WhatIf` (`[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]`).
+
 ## Scripts
 
 ```text
 scripts/
 ├── helpers/
-│   ├── Common-Functions.ps1           # Write-Step/OK/Warn/Fail, Invoke-AzCli, Invoke-ArmRestApi
+│   ├── Common-Functions.ps1           # Shared logging and Azure CLI wrappers
 │   └── Test-HydrationPrerequisites.ps1  # Pre-flight checks (dot-sourced by both main scripts)
 ├── Invoke-VMHydration.ps1             # Hydrate unmanaged VM in-place (Gen1 + Gen2)
 └── Invoke-VMReconnect.ps1             # Reconnect VM after cross-cluster restore

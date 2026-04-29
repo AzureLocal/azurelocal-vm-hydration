@@ -3,22 +3,26 @@
 ## Completed
 
 - [x] Initial repository scaffold and CI/CD
-- [x] MkDocs documentation site
+- [x] MkDocs documentation site with branding (icon, banner, favicon)
 - [x] `scripts/helpers/Common-Functions.ps1` — shared logging, `Invoke-AzCli`, `Invoke-ArmRestApi`
-- [x] `scripts/helpers/Test-HydrationPrerequisites.ps1` — pre-flight validation (all Step 1 checks from Private Preview doc)
+- [x] `scripts/helpers/Test-HydrationPrerequisites.ps1` — pre-flight validation (all 10 checks from Private Preview doc)
 - [x] `scripts/Invoke-VMHydration.ps1` — hydrate unmanaged Hyper-V VM into Azure Local (Gen1 + Gen2)
 - [x] `scripts/Invoke-VMReconnect.ps1` — reconnect Azure Local VM after cross-cluster restore
+- [x] `AzureLocalVMHydration` PowerShell module — PSGallery-publishable module (v0.1.0)
+  - `Invoke-VMHydration` — hydrate cmdlet with `-WhatIf` support
+  - `Invoke-VMReconnect` — reconnect cmdlet with `-WhatIf` support
+  - `Test-VMHydrationPrerequisites` — bool-returning pre-flight cmdlet
 
 ## In Progress
 
-- [ ] Field validation of `Invoke-VMHydration.ps1` against a live Azure Local 2602 cluster
-- [ ] Field validation of `Invoke-VMReconnect.ps1` against the Private Preview environment
+- [ ] Field validation of `Invoke-VMHydration` against a live Azure Local 2602 cluster
+- [ ] Field validation of `Invoke-VMReconnect` against the Private Preview environment
+- [ ] PSGallery publish of `AzureLocalVMHydration` v0.1.0
 
 ## Planned
 
-- [ ] Pester test coverage for helper functions (mocked az CLI responses)
+- [ ] Pester test coverage for module functions (mocked az CLI responses)
 - [ ] Bulk hydration support — accept a CSV/JSON VM inventory and hydrate multiple VMs in sequence
-- [ ] `AzureLocal.Hydration` PowerShell module — consolidate scripts into a publishable PSGallery module
 - [ ] Pipeline integration — GitHub Actions workflow for running Pester tests
 - [ ] Linux VM support validation
 - [ ] Gen1 field validation (ARM REST API path for `hyperVGeneration: V1`)

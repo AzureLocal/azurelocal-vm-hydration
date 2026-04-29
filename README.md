@@ -3,11 +3,12 @@
 ![Azure Local VM Hydration — Revive. Reconnect. Reclaim.](docs/assets/images/azurelocal-vm-hydration-banner.svg)
 
 [![Azure Local](https://img.shields.io/badge/Azure%20Local-azurelocal.cloud-0078D4?logo=microsoft-azure)](https://azurelocal.cloud)
+[![PSGallery](https://img.shields.io/badge/PSGallery-AzureLocalVMHydration-3b82f6?logo=powershell)](https://www.powershellgallery.com/packages/AzureLocalVMHydration)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Docs: MkDocs Material](https://img.shields.io/badge/docs-MkDocs%20Material-0f766e)](docs/index.md)
+[![Docs: MkDocs Material](https://img.shields.io/badge/docs-MkDocs%20Material-0f766e)](https://azurelocal.github.io/azurelocal-vm-hydration/)
 [![PowerShell: 7.x](https://img.shields.io/badge/PowerShell-7.x-3b82f6)](https://github.com/PowerShell/PowerShell)
 
-Documentation: [azurelocal.cloud](https://azurelocal.cloud) | Solutions: [Azure Local Solutions](https://azurelocal.cloud)
+Documentation: [azurelocal.github.io/azurelocal-vm-hydration](https://azurelocal.github.io/azurelocal-vm-hydration/) | Solutions: [azurelocal.cloud](https://azurelocal.cloud)
 
 > *Revive. Reconnect. Reclaim.*
 
@@ -27,15 +28,61 @@ Covers two scenarios:
 ## Prerequisites
 
 - Azure Local cluster running **2602 or later**
-- `az stack-hci-vm` extension **≥ 1.11.9** (`az extension show --name stack-hci-vm --query version`)
-- VMs must reside in a storage path GUID subfolder (e.g., `C:\ClusterStorage\Volume1\<guid>\`)
+- `az stack-hci-vm` extension **≥ 1.11.9**
+- VMs must reside in a storage path **GUID subfolder** (e.g., `C:\ClusterStorage\Volume1\<guid>\`)
 - VMs must be configured as **Highly Available** in Failover Cluster Manager
-- **Hyper-V Data Exchange Service (KVP)** enabled inside the VM
-- Run scripts as **Administrator** on a cluster node
+- **Hyper-V Data Exchange Service (KVP)** and **Guest Service Interface** enabled on the VM
+- Run as **Administrator** on a cluster node
 
 ---
 
-## Scripts
+## PowerShell Module (recommended)
+
+Install from PSGallery — works anywhere PowerShell 7 is available:
+
+```powershell
+Install-Module AzureLocalVMHydration -Scope CurrentUser
+```
+
+### VM Hydration
+
+```powershell
+Invoke-VMHydration `
+    -VMName        'WEBSRV01' `
+    -ResourceGroup 'rg-azlocal-prod' `
+    -CustomLocation '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ExtendedLocation/customLocations/<cl-name>' `
+    -StoragePathId  '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.AzureStackHCI/storageContainers/<name>' `
+    -NicName       'WEBSRV01-nic1' `
+    -SubnetId      'lnet-prod-vlan10' `
+    -Location      'eastus'
+```
+
+### VM Reconnect
+
+```powershell
+Invoke-VMReconnect `
+    -VMName        'APPSRV01' `
+    -LocalVMName   'APPSRV01_restored' `
+    -ResourceGroup 'rg-azlocal-prod' `
+    -CustomLocation '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ExtendedLocation/customLocations/<dest-cl-name>' `
+    -NicName       'APPSRV01-nic2' `
+    -SubnetId      'lnet-prod-vlan10' `
+    -Location      'eastus' `
+    -RemoveSourceVM
+```
+
+### Pre-flight Check Only
+
+```powershell
+Test-VMHydrationPrerequisites -VMName 'WEBSRV01'
+# Returns $true if all checks pass, $false if any fail
+```
+
+---
+
+## Standalone Scripts
+
+No install required — run directly on a cluster node:
 
 ```text
 scripts/
@@ -46,27 +93,7 @@ scripts/
 └── Invoke-VMReconnect.ps1               # Reconnect a VM after cross-cluster restore
 ```
 
-Both scripts support `-WhatIf` for dry runs.
-
-### VM Hydration (in-place onboarding)
-
-```powershell
-.\scripts\Invoke-VMHydration.ps1 `
-    -VMName "MyVM" `
-    -ResourceGroup "rg-azurelocal" `
-    -CustomLocation "/subscriptions/.../resourceGroups/.../providers/Microsoft.ExtendedLocation/customLocations/cl-site1" `
-    -LogicalNetwork "lnet-prod"
-```
-
-### VM Reconnect (cross-cluster restore)
-
-```powershell
-.\scripts\Invoke-VMReconnect.ps1 `
-    -VMName "MyVM" `
-    -ResourceGroup "rg-azurelocal" `
-    -CustomLocation "/subscriptions/.../resourceGroups/.../providers/Microsoft.ExtendedLocation/customLocations/cl-site2" `
-    -LogicalNetwork "lnet-prod"
-```
+Both scripts support `-WhatIf` for dry runs. See [Getting Started](https://azurelocal.github.io/azurelocal-vm-hydration/getting-started/) for full parameter reference and examples.
 
 ---
 

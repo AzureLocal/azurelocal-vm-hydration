@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-All operations require the following before running any script:
+All operations require the following before running any script or cmdlet:
 
 ### Azure Local Cluster
 
@@ -27,9 +27,9 @@ az extension show --name stack-hci-vm --query version
 
 ### VM Requirements
 
-Before running either script, confirm the target VM:
+Before running either operation, confirm the target VM:
 
-- Is in **Running** state in Hyper-V
+- Is in **Running** state in Hyper-V (required for reconnect; hydration can run on stopped VMs)
 - Is configured as a **Highly Available VM** in Failover Cluster Manager
 - Has the **Hyper-V Data Exchange Service (KVP)** integration service enabled
 - Has the **Hyper-V Guest Service Interface** integration service enabled
@@ -42,32 +42,54 @@ Before running either script, confirm the target VM:
 Get-VM -Name <VMName> | Select-Object Name, ConfigurationLocation
 ```
 
+Run a pre-flight check at any time:
+
+```powershell
+# Module
+Test-VMHydrationPrerequisites -VMName 'WEBSRV01'
+
+# Script
+.\scripts\Test-VMHydrationPrerequisites.ps1 -VMName 'WEBSRV01'
+```
+
 ---
 
-## Which Script to Use
+## Which Operation to Use
 
-| Scenario | Script |
-| --- | --- |
-| VM is on this cluster, never registered with Azure | `Invoke-VMHydration.ps1` |
-| VM was registered with Azure but restored to a different cluster | `Invoke-VMReconnect.ps1` |
+| Scenario | Module cmdlet | Script |
+| --- | --- | --- |
+| VM is on this cluster, never registered with Azure | `Invoke-VMHydration` | `scripts/Invoke-VMHydration.ps1` |
+| VM was registered with Azure but restored to a different cluster | `Invoke-VMReconnect` | `scripts/Invoke-VMReconnect.ps1` |
 
 ---
 
-## Running Invoke-VMHydration.ps1
+## Using the PowerShell Module
 
-Hydrates an unmanaged Hyper-V VM into Azure Local management in-place.
+Install once from PSGallery:
 
-Run on a cluster node (directly or via remote PowerShell):
+```powershell
+Install-Module AzureLocalVMHydration -Scope CurrentUser
+```
+
+See [Module Reference](module.md) for complete parameter documentation and examples for all three exported cmdlets.
+
+---
+
+## Using the Standalone Scripts
+
+Run directly on a cluster node — no install required.
+
+### VM Hydration
 
 ```powershell
 .\scripts\Invoke-VMHydration.ps1 `
-    -VMName 'WEBSRV01' `
+    -VMName        'WEBSRV01' `
     -ResourceGroup 'rg-azlocal-prod' `
-    -CustomLocation '/subscriptions/<sub>/resourcegroups/<rg>/providers/microsoft.extendedlocation/customlocations/<cl-name>' `
-    -StoragePathId '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.AzureStackHCI/storageContainers/<name>' `
-    -NicName 'WEBSRV01-nic1' `
-    -SubnetId 'lnet-prod-vlan10' `
-    -Location 'eastus'
+    -CustomLocation '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ExtendedLocation/customLocations/<cl-name>' `
+    -StoragePathId  '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.AzureStackHCI/storageContainers/<name>' `
+    -NicName       'WEBSRV01-nic1' `
+    -SubnetId      'lnet-prod-vlan10' `
+    -Location      'eastus'
 ```
 
 **Dry run first:**
@@ -76,42 +98,43 @@ Run on a cluster node (directly or via remote PowerShell):
 .\scripts\Invoke-VMHydration.ps1 -VMName 'WEBSRV01' ... -WhatIf
 ```
 
-### Gen1 VMs
+#### Gen1 VMs
 
 Add `-HyperVGeneration V1`. This uses the ARM REST API directly (the Azure CLI does not expose `hyperVGeneration`), and automatically disables vTPM and Secure Boot which are incompatible with Gen1:
 
 ```powershell
-.\scripts\Invoke-VMHydration.ps1 -VMName 'LEGACYAPP' -HyperVGeneration V1 ...
+.\scripts\Invoke-VMHydration.ps1 -VMName 'LEGACYAPP' -HyperVGeneration V1 `
+    -ResourceGroup 'rg-azlocal-prod' `
+    -CustomLocation '...' -StoragePathId '...' `
+    -NicName 'LEGACYAPP-nic1' -SubnetId 'lnet-prod-vlan10' -Location 'eastus'
 ```
 
 ---
 
-## Running Invoke-VMReconnect.ps1
-
-Reconnects a VM restored to a different Azure Local cluster back to its Azure resource.
+### VM Reconnect
 
 Run on a node of the **destination** cluster:
 
 ```powershell
 .\scripts\Invoke-VMReconnect.ps1 `
-    -VMName 'APPSRV01' `
-    -LocalVMName 'APPSRV01_restored' `
+    -VMName        'APPSRV01' `
+    -LocalVMName   'APPSRV01_restored' `
     -ResourceGroup 'rg-azlocal-prod' `
-    -CustomLocation '/subscriptions/<sub>/resourcegroups/<rg>/providers/microsoft.extendedlocation/customlocations/<dest-cl-name>' `
-    -NicName 'APPSRV01-nic2' `
-    -SubnetId 'lnet-prod-vlan10' `
-    -Location 'eastus' `
+    -CustomLocation '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ExtendedLocation/customLocations/<dest-cl-name>' `
+    -NicName       'APPSRV01-nic2' `
+    -SubnetId      'lnet-prod-vlan10' `
+    -Location      'eastus' `
     -DataDiskLocalPaths @('C:\ClusterStorage\Volume1\<guid>\APPSRV01\data1.vhdx') `
-    -DataDiskNames @('APPSRV01-data1') `
+    -DataDiskNames  @('APPSRV01-data1') `
     -RemoveSourceVM
 ```
 
 !!! danger "If Reconnect Fails"
     **Do NOT delete the VM resource from the Azure portal or CLI.**
     A VM resource may be created in a failed state. Deleting it can destroy the original VM.
-    Fix the root cause, then re-run `Invoke-VMReconnect.ps1` to repair it.
+    Fix the root cause, then re-run `Invoke-VMReconnect` to repair it.
 
-### After Reconnect — NIC IP Configuration
+#### After Reconnect — NIC IP Configuration
 
 - **SDN-enabled clusters:** The guest OS IP is configured automatically.
 - **Non-SDN clusters:** Manually configure the IP inside the guest OS via RDP or VM Connect:

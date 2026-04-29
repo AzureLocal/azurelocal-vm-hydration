@@ -16,13 +16,34 @@ Takes an existing, unmanaged Hyper-V VM running on an Azure Local cluster and br
 
 The VM becomes a `Microsoft.AzureStackHCI/virtualMachineInstances` resource, fully manageable from the Azure portal, with lifecycle operations (start/stop, disk attach, extensions, policy).
 
-**Script:** `scripts/Invoke-VMHydration.ps1`
+- **Module cmdlet:** `Invoke-VMHydration`
+- **Standalone script:** `scripts/Invoke-VMHydration.ps1`
 
 ## VM Reconnect
 
-Reconnects an Azure Local VM to its Azure resource after the VM has been restored to a *different* Azure Local cluster (e.g. via Veeam backup restore, export/import). The Azure resource becomes orphaned after such a restore; this script re-projects it onto the destination cluster.
+Reconnects an Azure Local VM to its Azure resource after the VM has been restored to a *different* Azure Local cluster (e.g. via Veeam backup restore, export/import). The Azure resource becomes orphaned after such a restore; this tooling re-projects it onto the destination cluster.
 
-**Script:** `scripts/Invoke-VMReconnect.ps1`
+- **Module cmdlet:** `Invoke-VMReconnect`
+- **Standalone script:** `scripts/Invoke-VMReconnect.ps1`
+
+---
+
+## Two Ways to Use This Repo
+
+### PowerShell Module (recommended)
+
+Install from PSGallery — works anywhere PowerShell 7 is available:
+
+```powershell
+Install-Module AzureLocalVMHydration -Scope CurrentUser
+```
+
+Full module reference, parameters, and examples: [Module Reference](module.md)
+
+### Standalone Scripts
+
+No install required — dot-source helpers and run directly on a cluster node.
+Full usage: [Getting Started](getting-started.md)
 
 ---
 
@@ -37,6 +58,7 @@ The term comes from Microsoft's own naming of the underlying CLI command: `az st
 ## Related
 
 - [Getting Started](getting-started.md)
+- [Module Reference](module.md)
 - [Roadmap](roadmap.md)
 - [AzureLocal Solutions](https://azurelocal.cloud)
 - [GitHub Repository](https://github.com/AzureLocal/azurelocal-vm-hydration)

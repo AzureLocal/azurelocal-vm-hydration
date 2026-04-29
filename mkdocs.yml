@@ -36,6 +36,7 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Module Reference: module.md
   - Roadmap: roadmap.md
   - Contributing: contributing.md
 
@@ -68,7 +69,7 @@ extra:
       link: https://x.com/countrycloudboy
       name: CountryCloudBoy on X
     - icon: fontawesome/brands/github
-      link: https://github.com/AzureLocal/azurelocal-hydration
+      link: https://github.com/AzureLocal/azurelocal-vm-hydration
       name: GitHub Repository
     - icon: fontawesome/solid/globe
       link: https://azurelocal.cloud
