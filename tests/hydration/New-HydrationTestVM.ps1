@@ -29,13 +29,28 @@
 .PARAMETER Generation
     Hyper-V generation. 1 or 2. Default: 2.
 
+.PARAMETER SourceVhdPath
+    Optional. Full path to an existing Windows Server VHDX to copy into the test VM folder.
+    If omitted, an empty dynamically-allocated VHD is created — sufficient to test Azure resource
+    registration but the VM will not boot into Windows (no guest OS, no Arc agent, no KVP exchange).
+
+    For full end-to-end testing (Arc agent, Guest Management, KVP), supply a path to a sysprepped
+    or clean Windows Server VHDX. Example:
+        -SourceVhdPath 'C:\ClusterStorage\csv-01\ISOs\WS2022_template.vhdx'
+
 .PARAMETER SwitchName
     Hyper-V virtual switch to connect the VM to. If not specified, no NIC is attached
     (the hydration script will create the Azure NIC separately).
 
 .EXAMPLE
+    # Azure resource layer test only (no OS needed):
     $ctx = .\New-HydrationTestVM.ps1 -StorageRootPath 'C:\ClusterStorage\Volume1'
-    # Returns hashtable with VMName, VhdPath, GuidFolderPath for use by test runner
+
+.EXAMPLE
+    # Full end-to-end test with a real Windows Server VHD:
+    $ctx = .\New-HydrationTestVM.ps1 `
+        -StorageRootPath 'C:\ClusterStorage\Volume1' `
+        -SourceVhdPath   'C:\ClusterStorage\Volume1\ISOs\WS2022_template.vhdx'
 
 .NOTES
     Run on one of the Azure Local cluster nodes.
@@ -56,6 +71,9 @@ param(
     [Parameter()]
     [ValidateSet(1, 2)]
     [int]$Generation = 2,
+
+    [Parameter()]
+    [string]$SourceVhdPath,
 
     [Parameter()]
     [string]$SwitchName
@@ -93,11 +111,26 @@ $vmFolder = Get-ClusterStorageGuidPath -StorageRootPath $StorageRootPath -VMName
 Write-TestInfo "VM folder: $vmFolder"
 
 $vhdPath = Join-Path $vmFolder "$VMName-os.vhdx"
-Write-TestStep "Creating test VHD ($VhdSizeGB GB): $vhdPath"
 
-if ($PSCmdlet.ShouldProcess($vhdPath, 'New-VHD')) {
-    New-VHD -Path $vhdPath -SizeBytes ($VhdSizeGB * 1GB) -Dynamic -ErrorAction Stop | Out-Null
-    Write-TestInfo "VHD created: $vhdPath"
+if ($SourceVhdPath) {
+    if (-not (Test-Path $SourceVhdPath)) {
+        Write-TestFail "SourceVhdPath not found: $SourceVhdPath"
+        exit 1
+    }
+    Write-TestStep "Copying source VHD to test folder: $vhdPath"
+    if ($PSCmdlet.ShouldProcess($vhdPath, 'Copy-Item')) {
+        Copy-Item -Path $SourceVhdPath -Destination $vhdPath -Force -ErrorAction Stop
+        Write-TestInfo "VHD copied from: $SourceVhdPath"
+    }
+} else {
+    Write-TestStep "Creating empty test VHD ($VhdSizeGB GB): $vhdPath"
+    Write-TestWarn "No -SourceVhdPath specified — VHD will be empty (no OS)."
+    Write-TestWarn "VM will start but not boot. Azure resource registration tests will still pass."
+    Write-TestWarn "For full end-to-end testing supply -SourceVhdPath pointing to a Windows Server VHDX."
+    if ($PSCmdlet.ShouldProcess($vhdPath, 'New-VHD')) {
+        New-VHD -Path $vhdPath -SizeBytes ($VhdSizeGB * 1GB) -Dynamic -ErrorAction Stop | Out-Null
+        Write-TestInfo "Empty VHD created: $vhdPath"
+    }
 }
 
 #endregion
@@ -180,6 +213,7 @@ $context = @{
     GuidFolderPath = $guidFolder
     StorageRoot    = $StorageRootPath
     Generation     = $Generation
+    HasRealOS      = [bool]$SourceVhdPath
     SetupTime      = (Get-Date -Format 'o')
 }
 
@@ -188,6 +222,7 @@ Write-TestInfo "VM Name       : $VMName"
 Write-TestInfo "VHD Path      : $vhdPath"
 Write-TestInfo "GUID Folder   : $guidFolder"
 Write-TestInfo "Generation    : Gen$Generation"
+Write-TestInfo "Has real OS   : $([bool]$SourceVhdPath)"
 Write-Host ""
 Write-Host "  Next: run Invoke-HydrationTest.ps1 with these values." -ForegroundColor Cyan
 Write-Host "  Cleanup: run Remove-HydrationTestResources.ps1 -VMName '$VMName'" -ForegroundColor Cyan

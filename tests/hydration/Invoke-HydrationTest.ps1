@@ -44,17 +44,34 @@
 .PARAMETER SkipClusterCheck
     Skip the HA/cluster check — use on single-node or non-clustered test environments.
 
+.PARAMETER SourceVhdPath
+    Optional. Full path to an existing Windows Server VHDX to use as the test VM disk.
+    If omitted, an empty VHD is created. The test validates Azure resource registration
+    in either mode. Supply a real VHD for full end-to-end testing (Arc agent, Guest Management).
+
 .PARAMETER SkipSetup
     Skip the New-HydrationTestVM step. Use when the VM already exists.
 
 .EXAMPLE
+    # Azure resource layer test (empty VHD):
     .\Invoke-HydrationTest.ps1 `
-        -ResourceGroup 'rg-azlocal-test' `
-        -CustomLocation '/subscriptions/.../customlocations/cl-test' `
-        -StoragePathId '/subscriptions/.../storageContainers/UserStorage1' `
+        -ResourceGroup   'rg-azlocal-test' `
+        -CustomLocation  '/subscriptions/.../customlocations/cl-test' `
+        -StoragePathId   '/subscriptions/.../storageContainers/UserStorage1' `
         -StorageRootPath 'C:\ClusterStorage\Volume1' `
-        -SubnetId 'lnet-test-vlan10' `
-        -Location 'eastus'
+        -SubnetId        'lnet-test-vlan10' `
+        -Location        'eastus'
+
+.EXAMPLE
+    # Full end-to-end test with real Windows Server VHD:
+    .\Invoke-HydrationTest.ps1 `
+        -ResourceGroup   'rg-azlocal-test' `
+        -CustomLocation  '/subscriptions/.../customlocations/cl-test' `
+        -StoragePathId   '/subscriptions/.../storageContainers/UserStorage1' `
+        -StorageRootPath 'C:\ClusterStorage\Volume1' `
+        -SubnetId        'lnet-test-vlan10' `
+        -Location        'eastus' `
+        -SourceVhdPath   'C:\ClusterStorage\csv-01\ISOs\WS2022_template.vhdx'
 
 .NOTES
     Run on one of the Azure Local cluster nodes.
@@ -91,6 +108,9 @@ param(
     [int]$Generation = 2,
 
     [Parameter()]
+    [string]$SourceVhdPath,
+
+    [Parameter()]
     [switch]$SkipClusterCheck,
 
     [Parameter()]
@@ -123,11 +143,12 @@ if (-not $SkipSetup) {
         StorageRootPath = $StorageRootPath
         Generation      = $Generation
     }
-    if ($VMName) { $setupParams['VMName'] = $VMName }
+    if ($VMName)       { $setupParams['VMName']       = $VMName }
+    if ($SourceVhdPath){ $setupParams['SourceVhdPath'] = $SourceVhdPath }
 
     $ctx = & "$TestDir\hydration\New-HydrationTestVM.ps1" @setupParams
     $VMName = $ctx.VMName
-    Write-TestInfo "Test VM created: $VMName"
+    Write-TestInfo "Test VM created: $VMName (HasRealOS: $($ctx.HasRealOS))"
 } else {
     Write-TestInfo "Skipping setup — using existing VM: $VMName"
 }

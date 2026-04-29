@@ -50,16 +50,32 @@
 .PARAMETER Location
     Azure region.
 
+.PARAMETER SourceVhdPath
+    Optional. Full path to an existing Windows Server VHDX to use as the VM disk.
+    If omitted, an empty VHD is created — sufficient to test Azure resource registration
+    but the VM will not boot into Windows. Pass the same value you would pass to
+    New-HydrationTestVM.ps1 -SourceVhdPath.
+
 .PARAMETER ExportPath
     Temporary path for the VM export. Defaults to C:\Temp\HydrationTestExport.
     Cleaned up automatically after re-import.
 
 .EXAMPLE
+    # Azure resource layer test only:
     $ctx = .\New-ReconnectTestScenario.ps1 `
         -ResourceGroup 'rg-azlocal-test' `
         -CustomLocation '...' -StoragePathId '...' `
         -StorageRootPath 'C:\ClusterStorage\Volume1' `
         -SubnetId 'lnet-test' -Location 'eastus'
+
+.EXAMPLE
+    # Full end-to-end test with a real Windows Server VHD:
+    $ctx = .\New-ReconnectTestScenario.ps1 `
+        -ResourceGroup    'rg-azlocal-test' `
+        -CustomLocation   '...' -StoragePathId '...' `
+        -StorageRootPath  'C:\ClusterStorage\Volume1' `
+        -SubnetId         'lnet-test' -Location 'eastus' `
+        -SourceVhdPath    'C:\ClusterStorage\csv-01\ISOs\WS2022_template.vhdx'
 
 .NOTES
     Run on one of the Azure Local cluster nodes. Azure CLI must be authenticated.
@@ -90,6 +106,9 @@ param(
     [string]$Location,
 
     [Parameter()]
+    [string]$SourceVhdPath,
+
+    [Parameter()]
     [string]$ExportPath = 'C:\Temp\HydrationTestExport',
 
     [Parameter()]
@@ -117,10 +136,13 @@ Write-TestBanner "Reconnect Test Scenario Setup: $VMName"
 Write-TestStep "Phase A — Creating and hydrating test VM '$VMName'"
 
 # Create plain Hyper-V VM
-$ctx = & "$TestDir\hydration\New-HydrationTestVM.ps1" `
-    -VMName $VMName `
-    -StorageRootPath $StorageRootPath `
-    -Generation 2
+$setupParams = @{
+    VMName          = $VMName
+    StorageRootPath = $StorageRootPath
+    Generation      = 2
+}
+if ($SourceVhdPath) { $setupParams['SourceVhdPath'] = $SourceVhdPath }
+$ctx = & "$TestDir\hydration\New-HydrationTestVM.ps1" @setupParams
 
 Write-TestInfo "VM created at: $($ctx.VMFolder)"
 

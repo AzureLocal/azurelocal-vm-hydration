@@ -32,8 +32,19 @@ test:
   # Prefix for test VM names — VMs are named <prefix>-<timestamp>
   vm_name_prefix: "test-hydration"
 
-  # VHD size in GB for test VMs — keep small for fast setup
+  # VHD size in GB for test VMs — used only when source_vhd_path is NOT set
   vhd_size_gb: 8
+
+  # Optional: path to an existing Windows Server VHDX on cluster storage.
+  # When set, New-HydrationTestVM.ps1 copies this VHD into the test GUID folder
+  # instead of creating an empty one. Required for full end-to-end testing
+  # (Arc agent install, Guest Management, KVP exchange, actual OS boots).
+  #
+  # Leave blank to test Azure resource registration only (empty VHD, VM will not boot).
+  #
+  # Example: a clean/sysprepped WS2022 VHDX already on the cluster storage volume.
+  source_vhd_path: ""
+  # source_vhd_path: "C:\\ClusterStorage\\csv-01\\ISOs\\WS2022_template.vhdx"
 
   # Temporary export path used by the reconnect test scenario setup
   # Must be writable by the cluster node
