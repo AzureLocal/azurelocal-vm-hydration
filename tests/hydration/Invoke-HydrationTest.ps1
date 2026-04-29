@@ -80,6 +80,15 @@
 .PARAMETER SkipSetup
     Skip the New-HydrationTestVM step. Use when the VM already exists.
 
+.PARAMETER ComputerName
+    Name or IP address of a remote Azure Local cluster node. The scripts/ and tests/
+    directories are copied to the remote node and the test is executed there via WinRM.
+    Azure CLI must be authenticated on the remote node (az login or service principal).
+
+.PARAMETER Credential
+    PSCredential for the WinRM session. Omit to use current user credentials
+    (Kerberos / NTLM integrated auth for domain-joined nodes).
+
 .EXAMPLE
     # Azure resource layer test only (empty VHD, no OS needed):
     .\Invoke-HydrationTest.ps1 -ResourceGroup 'rg-test' -CustomLocation '...' `
@@ -159,7 +168,13 @@ param(
     [switch]$SkipClusterCheck,
 
     [Parameter()]
-    [switch]$SkipSetup
+    [switch]$SkipSetup,
+
+    [Parameter()]
+    [string]$ComputerName,
+
+    [Parameter()]
+    [pscredential]$Credential
 )
 
 Set-StrictMode -Version Latest
@@ -169,6 +184,16 @@ $TestDir   = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path
 $ScriptsDir = Join-Path (Split-Path -Parent $TestDir) 'scripts'
 
 . "$TestDir\helpers\Test-Common.ps1"
+
+if ($ComputerName) {
+    $repoRoot   = Split-Path -Parent $TestDir
+    $passParams = @{} + $PSBoundParameters
+    $null = $passParams.Remove('ComputerName')
+    $null = $passParams.Remove('Credential')
+    Invoke-TestRemotely -ComputerName $ComputerName -ScriptPath $MyInvocation.MyCommand.Path `
+        -RepoRoot $repoRoot -Parameters $passParams -Credential $Credential
+    return
+}
 
 $passed   = 0
 $failed   = 0

@@ -96,8 +96,19 @@
     # Download eval ISO automatically:
     $ctx = .\New-ReconnectTestScenario.ps1 ... -DownloadEvalIso
 
+.PARAMETER SkipClusterCheck
+    Skip HA/cluster validation (single-node environments).
+
+.PARAMETER ComputerName
+    Name or IP address of a remote Azure Local cluster node. The scripts are copied and
+    executed there via WinRM. Azure CLI must be authenticated on the remote node.
+
+.PARAMETER Credential
+    PSCredential for the WinRM session. Omit to use current user credentials.
+
 .NOTES
-    Run on one of the Azure Local cluster nodes as Administrator. Azure CLI must be authenticated.
+    Run on one of the Azure Local cluster nodes as Administrator, or remotely via -ComputerName.
+    Azure CLI must be authenticated on the node (az login or service principal).
     VHD source priority: GalleryImageName > IsoPath/DownloadEvalIso > SourceVhdPath > empty VHD.
     After setup, run Invoke-ReconnectTest.ps1.
     Run Remove-ReconnectTestResources.ps1 to clean up.
@@ -147,7 +158,13 @@ param(
     [string]$ExportPath = 'C:\Temp\HydrationTestExport',
 
     [Parameter()]
-    [switch]$SkipClusterCheck
+    [switch]$SkipClusterCheck,
+
+    [Parameter()]
+    [string]$ComputerName,
+
+    [Parameter()]
+    [pscredential]$Credential
 )
 
 Set-StrictMode -Version Latest
@@ -157,6 +174,16 @@ $TestDir    = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Pat
 $ScriptsDir = Join-Path (Split-Path -Parent $TestDir) 'scripts'
 
 . "$TestDir\helpers\Test-Common.ps1"
+
+if ($ComputerName) {
+    $repoRoot   = Split-Path -Parent $TestDir
+    $passParams = @{} + $PSBoundParameters
+    $null = $passParams.Remove('ComputerName')
+    $null = $passParams.Remove('Credential')
+    Invoke-TestRemotely -ComputerName $ComputerName -ScriptPath $MyInvocation.MyCommand.Path `
+        -RepoRoot $repoRoot -Parameters $passParams -Credential $Credential
+    return
+}
 
 #region ── Resolve VHD Source ─────────────────────────────────────────────────
 # Priority: GalleryImageName > IsoPath/DownloadEvalIso > SourceVhdPath > empty VHD

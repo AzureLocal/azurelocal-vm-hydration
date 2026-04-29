@@ -62,6 +62,15 @@
 .PARAMETER SkipClusterCheck
     Skip the HA/Failover Cluster check. Use only in non-clustered test environments.
 
+.PARAMETER ComputerName
+    Name or IP address of a remote Azure Local cluster node. When specified, the script
+    connects via PSRemoting and runs the Invoke-VMHydration module cmdlet on the remote node.
+    The AzureLocalVMHydration module must be installed on the remote node.
+    Azure CLI must be authenticated on the remote node (az login or service principal).
+
+.PARAMETER Credential
+    PSCredential for the WinRM session. Omit to use current user credentials.
+
 .EXAMPLE
     .\Invoke-VMHydration.ps1 `
         -VMName 'WEBSRV01' `
@@ -120,11 +129,37 @@ param(
     [string]$HyperVGeneration = 'V2',
 
     [Parameter()]
-    [switch]$SkipClusterCheck
+    [switch]$SkipClusterCheck,
+
+    [Parameter()]
+    [string]$ComputerName,
+
+    [Parameter()]
+    [pscredential]$Credential
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($ComputerName) {
+    $sessionParams = @{ ComputerName = $ComputerName }
+    if ($Credential) { $sessionParams['Credential'] = $Credential }
+    Write-Host "  Connecting to $ComputerName ..." -ForegroundColor Cyan
+    $session = New-PSSession @sessionParams -ErrorAction Stop
+    try {
+        $passParams = @{} + $PSBoundParameters
+        $null = $passParams.Remove('ComputerName')
+        $null = $passParams.Remove('Credential')
+        Invoke-Command -Session $session -ArgumentList $passParams -ScriptBlock {
+            param($pp)
+            Import-Module AzureLocalVMHydration -ErrorAction Stop
+            Invoke-VMHydration @pp
+        }
+    } finally {
+        Remove-PSSession $session -ErrorAction SilentlyContinue
+    }
+    return
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$ScriptDir\helpers\Common-Functions.ps1"

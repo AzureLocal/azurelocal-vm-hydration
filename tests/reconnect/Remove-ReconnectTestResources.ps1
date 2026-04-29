@@ -26,8 +26,19 @@
 .PARAMETER Force
     Skip confirmation prompts.
 
+.PARAMETER ComputerName
+    Name or IP address of a remote Azure Local cluster node. The scripts are copied and
+    executed there via WinRM. Azure CLI must be authenticated on the remote node.
+
+.PARAMETER Credential
+    PSCredential for the WinRM session. Omit to use current user credentials.
+
 .EXAMPLE
     .\Remove-ReconnectTestResources.ps1 -VMName 'test-reconnect-20260428120000' -ResourceGroup 'rg-azlocal-test'
+
+.EXAMPLE
+    .\Remove-ReconnectTestResources.ps1 -VMName 'test-reconnect-20260428120000' -ResourceGroup 'rg-azlocal-test' `
+        -ComputerName 'tplabs-01-n01.azrl.mgmt' -Force
 #>
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
@@ -44,7 +55,13 @@ param(
     [switch]$KeepVhd,
 
     [Parameter()]
-    [switch]$Force
+    [switch]$Force,
+
+    [Parameter()]
+    [string]$ComputerName,
+
+    [Parameter()]
+    [pscredential]$Credential
 )
 
 Set-StrictMode -Version Latest
@@ -52,6 +69,16 @@ $ErrorActionPreference = 'Stop'
 
 $TestDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 . "$TestDir\helpers\Test-Common.ps1"
+
+if ($ComputerName) {
+    $repoRoot   = Split-Path -Parent $TestDir
+    $passParams = @{} + $PSBoundParameters
+    $null = $passParams.Remove('ComputerName')
+    $null = $passParams.Remove('Credential')
+    Invoke-TestRemotely -ComputerName $ComputerName -ScriptPath $MyInvocation.MyCommand.Path `
+        -RepoRoot $repoRoot -Parameters $passParams -Credential $Credential
+    return
+}
 
 if (-not $RestoredVMName) { $RestoredVMName = "$VMName-restored" }
 

@@ -10,7 +10,7 @@ The reconnect test simulates the real-world "VM restored to a different cluster"
 
 ### Phase A — Create and hydrate a test VM
 
-```
+```text
 New-ReconnectTestScenario.ps1 (Phase A)
   └─ Calls New-HydrationTestVM.ps1 to create a plain Hyper-V VM
   └─ Calls Invoke-VMHydration.ps1 to register it with Azure
@@ -20,7 +20,7 @@ New-ReconnectTestScenario.ps1 (Phase A)
 
 ### Phase B — Simulate a backup restore that orphans the Azure resource
 
-```
+```text
 New-ReconnectTestScenario.ps1 (Phase B)
   └─ Stops the VM
   └─ Exports the VM to a temporary path (simulating a Veeam/MABS backup)
@@ -34,7 +34,7 @@ New-ReconnectTestScenario.ps1 (Phase B)
 
 ### The actual test
 
-```
+```text
 Invoke-ReconnectTest.ps1
   └─ (Optionally) calls New-ReconnectTestScenario.ps1
   └─ Confirms orphan state (Azure resource absent, Hyper-V VM present)
@@ -105,9 +105,79 @@ Omit all VHD source options. An empty VHD is created. The VM starts in Hyper-V b
 
 ---
 
+## Remote Execution (from a jump box)
+
+All scripts support `-ComputerName` so you can run them from any Windows machine that has
+WinRM access to a cluster node — no local installation required on the jump box beyond this
+repo and PowerShell.
+
+### Prerequisites on the cluster node
+
+| Requirement | Why |
+|---|---|
+| WinRM enabled | `Enable-PSRemoting -Force` (already on by default on Server) |
+| Azure CLI authenticated | `az login` or a service principal configured via environment variables |
+| `AzureLocalVMHydration` module | Only needed when using `Invoke-VMReconnect.ps1` standalone (not for the test scripts) |
+
+The test scripts copy the `tests/` and `scripts/` directories to the node's `$env:TEMP\AzureLocalVMHydrationTests\`
+on each run. Nothing is permanently installed.
+
+### Run the full reconnect test remotely
+
+```powershell
+.\tests\reconnect\Invoke-ReconnectTest.ps1 `
+    -ComputerName    'tplabs-01-n01.azrl.mgmt' `
+    -ResourceGroup   'rg-azlocal-test' `
+    -CustomLocation  '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ExtendedLocation/customLocations/<cl-name>' `
+    -StoragePathId   '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.AzureStackHCI/storageContainers/<name>' `
+    -StorageRootPath 'C:\ClusterStorage\csv-01' `
+    -SubnetId        'lnet-test-vlan10' `
+    -Location        'eastus' `
+    -GalleryImageName 'windows-server-2022-datacenter'
+```
+
+### Set up the orphan scenario remotely only
+
+```powershell
+.\tests\reconnect\New-ReconnectTestScenario.ps1 `
+    -ComputerName    'tplabs-01-n01.azrl.mgmt' `
+    -ResourceGroup   'rg-azlocal-test' `
+    -CustomLocation  '...' `
+    -StoragePathId   '...' `
+    -StorageRootPath 'C:\ClusterStorage\csv-01' `
+    -SubnetId        'lnet-test-vlan10' `
+    -Location        'eastus' `
+    -GalleryImageName 'windows-server-2022-datacenter'
+```
+
+### Clean up remotely
+
+```powershell
+.\tests\reconnect\Remove-ReconnectTestResources.ps1 `
+    -ComputerName  'tplabs-01-n01.azrl.mgmt' `
+    -VMName        'test-reconnect-20260428120000' `
+    -ResourceGroup 'rg-azlocal-test' `
+    -Force
+```
+
+### With explicit credentials (non-domain or cross-domain)
+
+```powershell
+$cred = Get-Credential
+
+.\tests\reconnect\Invoke-ReconnectTest.ps1 `
+    -ComputerName 'tplabs-01-n01.azrl.mgmt' `
+    -Credential   $cred `
+    -ResourceGroup 'rg-azlocal-test' `
+    ...
+```
+
+---
+
 ## Quick Start
 
-Run on an Azure Local cluster node as Administrator. Azure CLI must be authenticated (`az login`).
+Run on an Azure Local cluster node as Administrator, or remotely via `-ComputerName`.
+Azure CLI must be authenticated on the cluster node (`az login`).
 
 ### Step 1 — Run the full test (all-in-one)
 

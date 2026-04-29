@@ -8,7 +8,7 @@ End-to-end integration tests for `Invoke-VMHydration.ps1` and the `Invoke-VMHydr
 
 The hydration test simulates the real-world "unmanaged VM on a cluster" scenario:
 
-```
+```text
 New-HydrationTestVM.ps1
   └─ Creates a plain Hyper-V VM with no Azure registration
        • VHD under the cluster storage GUID folder
@@ -125,9 +125,65 @@ Gen1 testing exercises the ARM REST API code path in `Invoke-VMHydration.ps1` �
 
 ---
 
+## Remote Execution (from a jump box)
+
+All scripts support `-ComputerName` so you can run them from any Windows machine that has
+WinRM access to a cluster node — no local installation required on the jump box beyond this
+repo and PowerShell.
+
+### Prerequisites on the cluster node
+
+| Requirement | Why |
+|---|---|
+| WinRM enabled | `Enable-PSRemoting -Force` (already on by default on Server) |
+| Azure CLI authenticated | `az login` or a service principal configured via environment variables |
+| `AzureLocalVMHydration` module | Only needed when using `Invoke-VMHydration.ps1` standalone (not for the test scripts) |
+
+The test scripts copy the `tests/` and `scripts/` directories to the node's `$env:TEMP\AzureLocalVMHydrationTests\`
+on each run. Nothing is permanently installed.
+
+### Run the full test remotely
+
+```powershell
+.\tests\hydration\Invoke-HydrationTest.ps1 `
+    -ComputerName    'tplabs-01-n01.azrl.mgmt' `
+    -ResourceGroup   'rg-azlocal-test' `
+    -CustomLocation  '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ExtendedLocation/customLocations/<cl-name>' `
+    -StoragePathId   '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.AzureStackHCI/storageContainers/<name>' `
+    -StorageRootPath 'C:\ClusterStorage\csv-01' `
+    -SubnetId        'lnet-test-vlan10' `
+    -Location        'eastus' `
+    -GalleryImageName 'windows-server-2022-datacenter'
+```
+
+### Clean up remotely
+
+```powershell
+.\tests\hydration\Remove-HydrationTestResources.ps1 `
+    -ComputerName  'tplabs-01-n01.azrl.mgmt' `
+    -VMName        'test-hydration-20260428120000' `
+    -ResourceGroup 'rg-azlocal-test' `
+    -Force
+```
+
+### With explicit credentials (non-domain or cross-domain)
+
+```powershell
+$cred = Get-Credential
+
+.\tests\hydration\Invoke-HydrationTest.ps1 `
+    -ComputerName 'tplabs-01-n01.azrl.mgmt' `
+    -Credential   $cred `
+    -ResourceGroup 'rg-azlocal-test' `
+    ...
+```
+
+---
+
 ## Quick Start
 
-Run on an Azure Local cluster node as Administrator. Azure CLI must be authenticated (`az login`).
+Run on an Azure Local cluster node as Administrator, or remotely via `-ComputerName`.
+Azure CLI must be authenticated on the cluster node (`az login`).
 
 ### Step 1 — Run the test (all-in-one)
 

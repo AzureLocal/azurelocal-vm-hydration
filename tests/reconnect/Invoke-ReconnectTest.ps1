@@ -48,6 +48,13 @@
 .PARAMETER SkipClusterCheck
     Skip the HA/cluster check.
 
+.PARAMETER ComputerName
+    Name or IP address of a remote Azure Local cluster node. The scripts are copied and
+    executed there via WinRM. Azure CLI must be authenticated on the remote node.
+
+.PARAMETER Credential
+    PSCredential for the WinRM session. Omit to use current user credentials.
+
 .EXAMPLE
     .\Invoke-ReconnectTest.ps1 `
         -ResourceGroup 'rg-azlocal-test' `
@@ -93,7 +100,13 @@ param(
     [switch]$SkipSetup,
 
     [Parameter()]
-    [switch]$SkipClusterCheck
+    [switch]$SkipClusterCheck,
+
+    [Parameter()]
+    [string]$ComputerName,
+
+    [Parameter()]
+    [pscredential]$Credential
 )
 
 Set-StrictMode -Version Latest
@@ -103,6 +116,16 @@ $TestDir    = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Pat
 $ScriptsDir = Join-Path (Split-Path -Parent $TestDir) 'scripts'
 
 . "$TestDir\helpers\Test-Common.ps1"
+
+if ($ComputerName) {
+    $repoRoot   = Split-Path -Parent $TestDir
+    $passParams = @{} + $PSBoundParameters
+    $null = $passParams.Remove('ComputerName')
+    $null = $passParams.Remove('Credential')
+    Invoke-TestRemotely -ComputerName $ComputerName -ScriptPath $MyInvocation.MyCommand.Path `
+        -RepoRoot $repoRoot -Parameters $passParams -Credential $Credential
+    return
+}
 
 $passed   = 0
 $failed   = 0

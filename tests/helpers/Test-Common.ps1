@@ -459,6 +459,71 @@ function Get-ClusterStorageGuidPath {
 
 #endregion
 
+#region ── Remote Execution Helper ───────────────────────────────────────────
+
+function Invoke-TestRemotely {
+    <#
+    .SYNOPSIS
+        Stages test scripts on a remote cluster node and executes them via PSRemoting.
+    .DESCRIPTION
+        Called automatically by test scripts when -ComputerName is specified.
+        Copies the tests/ and scripts/ directories to a temp folder on the remote node,
+        then invokes the target script there. The remote node runs the script locally —
+        all Hyper-V and cluster operations happen on the remote node itself.
+
+        Prerequisites on the remote node:
+          - WinRM enabled (Enable-PSRemoting -Force)
+          - Azure CLI authenticated (az login or service principal)
+          - AzureLocalVMHydration module installed (for -SkipSetup workflows)
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$ComputerName,
+        [Parameter(Mandatory)] [string]$ScriptPath,
+        [Parameter(Mandatory)] [string]$RepoRoot,
+        [Parameter(Mandatory)] [hashtable]$Parameters,
+        [pscredential]$Credential
+    )
+
+    $sessionParams = @{ ComputerName = $ComputerName }
+    if ($Credential) { $sessionParams['Credential'] = $Credential }
+
+    Write-Host ""
+    Write-Host "  [REMOTE] Target node  : $ComputerName" -ForegroundColor Cyan
+    $session = New-PSSession @sessionParams -ErrorAction Stop
+
+    try {
+        $remoteTempBase = Invoke-Command -Session $session -ScriptBlock {
+            Join-Path $env:TEMP 'AzureLocalVMHydrationTests'
+        }
+        Write-Host "  [REMOTE] Staging path : $remoteTempBase" -ForegroundColor Cyan
+
+        Invoke-Command -Session $session -ArgumentList $remoteTempBase -ScriptBlock {
+            param($base)
+            foreach ($d in @($base, "$base\tests", "$base\scripts")) {
+                if (-not (Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force | Out-Null }
+            }
+        }
+
+        Write-Host "  [REMOTE] Copying scripts to remote node ..." -ForegroundColor Cyan
+        Copy-Item -Path "$RepoRoot\tests"   -Destination "$remoteTempBase\tests"   -ToSession $session -Recurse -Force
+        Copy-Item -Path "$RepoRoot\scripts" -Destination "$remoteTempBase\scripts" -ToSession $session -Recurse -Force
+
+        $relPath      = $ScriptPath.Substring($RepoRoot.Length).TrimStart('\', '/')
+        $remoteScript = Join-Path $remoteTempBase $relPath
+
+        Write-Host "  [REMOTE] Invoking    : $remoteScript" -ForegroundColor Cyan
+        Write-Host ""
+
+        Invoke-Command -Session $session -ArgumentList $remoteScript, $Parameters -ScriptBlock {
+            param($sp, $pp) & $sp @pp
+        }
+    } finally {
+        Remove-PSSession $session -ErrorAction SilentlyContinue
+    }
+}
+
+#endregion
+
 #region ── Test Result Summary ────────────────────────────────────────────────
 
 function Write-TestSummary {
