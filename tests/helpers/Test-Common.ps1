@@ -158,6 +158,98 @@ function Wait-ForAzureResource {
 
 #endregion
 
+#region ── Gallery Image Resolution ──────────────────────────────────────────
+
+function Get-GalleryImagePath {
+    <#
+    .SYNOPSIS
+        Resolves the local VHDX path of an Azure Local gallery (marketplace) image.
+    .DESCRIPTION
+        Queries the gallery image resource for its storage container, then locates
+        the VHDX file on the cluster storage volume. Falls back to a broad search
+        of StorageRootPath if the container-based lookup does not find the file.
+    .OUTPUTS
+        [string] Absolute local path to the VHDX, or $null if not found.
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$ImageName,
+        [Parameter(Mandatory)] [string]$ResourceGroup,
+        [string]$StorageRootPath
+    )
+
+    Write-TestInfo "Resolving local path for gallery image '$ImageName'"
+
+    $imageJson = & az stack-hci-vm image show `
+        --name $ImageName `
+        --resource-group $ResourceGroup `
+        --output json 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-TestWarn "Gallery image '$ImageName' not found in resource group '$ResourceGroup'."
+        Write-TestWarn "List available images:  az stack-hci-vm image list -g $ResourceGroup --output table"
+        return $null
+    }
+
+    $image = $imageJson | ConvertFrom-Json -ErrorAction SilentlyContinue
+    if (-not $image) {
+        Write-TestWarn "Could not parse gallery image response."
+        return $null
+    }
+
+    # Some custom/local images have imagePath set directly
+    if ($image.properties.imagePath -and (Test-Path $image.properties.imagePath)) {
+        Write-TestInfo "Resolved via imagePath: $($image.properties.imagePath)"
+        return $image.properties.imagePath
+    }
+
+    # Marketplace images: resolve through the linked storage container's local path
+    $containerId = $image.properties.containerId
+    if ($containerId) {
+        $containerJson = & az stack-hci-vm storagepath show --ids $containerId --output json 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $container  = $containerJson | ConvertFrom-Json -ErrorAction SilentlyContinue
+            $localPath  = $container.properties.path
+            if ($localPath -and (Test-Path $localPath)) {
+                $vhdx = Get-ChildItem -Path $localPath -Filter '*.vhdx' -Recurse -ErrorAction SilentlyContinue |
+                    Where-Object {
+                        $_.FullName     -match [regex]::Escape($ImageName) -or
+                        $_.Directory.Name -match [regex]::Escape($ImageName)
+                    } |
+                    Select-Object -First 1
+                if ($vhdx) {
+                    Write-TestInfo "Resolved via storage container: $($vhdx.FullName)"
+                    return $vhdx.FullName
+                }
+                Write-TestWarn "Storage container found at '$localPath' but no VHDX matched '$ImageName'."
+                Write-TestWarn "Files found:"
+                Get-ChildItem -Path $localPath -Filter '*.vhdx' -Recurse -ErrorAction SilentlyContinue |
+                    Select-Object -First 10 | ForEach-Object { Write-TestWarn "  $($_.FullName)" }
+            }
+        }
+    }
+
+    # Fallback: search entire storage root
+    if ($StorageRootPath -and (Test-Path $StorageRootPath)) {
+        Write-TestInfo "Falling back to broad search of '$StorageRootPath' for '$ImageName'..."
+        $vhdx = Get-ChildItem -Path $StorageRootPath -Filter '*.vhdx' -Recurse -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.FullName       -match [regex]::Escape($ImageName) -or
+                $_.Directory.Name -match [regex]::Escape($ImageName)
+            } |
+            Select-Object -First 1
+        if ($vhdx) {
+            Write-TestInfo "Resolved via storage root search: $($vhdx.FullName)"
+            return $vhdx.FullName
+        }
+    }
+
+    Write-TestWarn "Could not locate a local VHDX for gallery image '$ImageName'."
+    Write-TestWarn "Specify the path directly:  -SourceVhdPath 'C:\ClusterStorage\...\image.vhdx'"
+    return $null
+}
+
+#endregion
+
 #region ── GUID Folder Helpers ────────────────────────────────────────────────
 
 function Get-ClusterStorageGuidPath {

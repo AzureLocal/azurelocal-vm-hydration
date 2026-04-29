@@ -35,16 +35,22 @@ test:
   # VHD size in GB for test VMs — used only when source_vhd_path is NOT set
   vhd_size_gb: 8
 
-  # Optional: path to an existing Windows Server VHDX on cluster storage.
-  # When set, New-HydrationTestVM.ps1 copies this VHD into the test GUID folder
-  # instead of creating an empty one. Required for full end-to-end testing
-  # (Arc agent install, Guest Management, KVP exchange, actual OS boots).
+  # --- VHD source for test VMs (pick ONE of the three options below) ---
   #
-  # Leave blank to test Azure resource registration only (empty VHD, VM will not boot).
+  # OPTION 1 (recommended): Use a marketplace image already downloaded to the cluster.
+  #   The test script resolves the local VHDX path automatically from the Azure resource.
+  #   List images: az stack-hci-vm image list -g <rg> --output table
+  gallery_image_name: ""
+  # gallery_image_name: "windows-server-2022-datacenter"
   #
-  # Example: a clean/sysprepped WS2022 VHDX already on the cluster storage volume.
+  # OPTION 2: Point directly at a VHDX file on cluster storage (absolute path on cluster node).
+  #   Use this if gallery image resolution fails, or for a custom/sysprepped template.
   source_vhd_path: ""
   # source_vhd_path: "C:\\ClusterStorage\\csv-01\\ISOs\\WS2022_template.vhdx"
+  #
+  # OPTION 3: Leave both blank — an empty VHD is created.
+  #   The VM will NOT boot into Windows. Only Azure resource registration is tested.
+  #   Sufficient for: disk create-from-local, VM resource creation, NIC attach.
 
   # Temporary export path used by the reconnect test scenario setup
   # Must be writable by the cluster node

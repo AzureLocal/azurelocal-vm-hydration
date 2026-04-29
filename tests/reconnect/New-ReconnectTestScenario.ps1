@@ -50,11 +50,18 @@
 .PARAMETER Location
     Azure region.
 
+.PARAMETER GalleryImageName
+    Name of an Azure Local gallery (marketplace) image already downloaded to this cluster.
+    The script resolves its local VHDX path and uses it for the test VM.
+    Takes precedence over -SourceVhdPath.
+
+    List available images:
+        az stack-hci-vm image list --resource-group <rg> --output table
+
 .PARAMETER SourceVhdPath
-    Optional. Full path to an existing Windows Server VHDX to use as the VM disk.
-    If omitted, an empty VHD is created — sufficient to test Azure resource registration
-    but the VM will not boot into Windows. Pass the same value you would pass to
-    New-HydrationTestVM.ps1 -SourceVhdPath.
+    Full path to an existing Windows Server VHDX to use as the VM disk.
+    Use when -GalleryImageName resolution fails or to specify an exact file.
+    If neither is set, an empty VHD is created (Azure resource layer testing only).
 
 .PARAMETER ExportPath
     Temporary path for the VM export. Defaults to C:\Temp\HydrationTestExport.
@@ -106,6 +113,9 @@ param(
     [string]$Location,
 
     [Parameter()]
+    [string]$GalleryImageName,
+
+    [Parameter()]
     [string]$SourceVhdPath,
 
     [Parameter()]
@@ -122,6 +132,24 @@ $TestDir    = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Pat
 $ScriptsDir = Join-Path (Split-Path -Parent $TestDir) 'scripts'
 
 . "$TestDir\helpers\Test-Common.ps1"
+
+#region ── Resolve VHD Source ─────────────────────────────────────────────────
+
+if ($GalleryImageName -and -not $SourceVhdPath) {
+    $resolvedPath = Get-GalleryImagePath `
+        -ImageName       $GalleryImageName `
+        -ResourceGroup   $ResourceGroup `
+        -StorageRootPath $StorageRootPath
+    if ($resolvedPath) {
+        $SourceVhdPath = $resolvedPath
+        Write-Host "  Using gallery image: $GalleryImageName" -ForegroundColor Cyan
+        Write-Host "  Local path         : $SourceVhdPath"    -ForegroundColor Cyan
+    } else {
+        Write-Host "  [WARN] Could not resolve gallery image '$GalleryImageName' — falling back to empty VHD." -ForegroundColor Yellow
+    }
+}
+
+#endregion
 
 if (-not $VMName) {
     $VMName = "test-reconnect-$(Get-Date -Format 'yyyyMMddHHmmss')"

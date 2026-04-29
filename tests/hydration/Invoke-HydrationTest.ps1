@@ -44,10 +44,18 @@
 .PARAMETER SkipClusterCheck
     Skip the HA/cluster check — use on single-node or non-clustered test environments.
 
+.PARAMETER GalleryImageName
+    Name of an Azure Local gallery (marketplace) image already downloaded to this cluster.
+    The script resolves its local VHDX path automatically and uses it as the test VM disk.
+    Takes precedence over -SourceVhdPath when both are provided.
+
+    List available images:
+        az stack-hci-vm image list --resource-group <rg> --output table
+
 .PARAMETER SourceVhdPath
-    Optional. Full path to an existing Windows Server VHDX to use as the test VM disk.
-    If omitted, an empty VHD is created. The test validates Azure resource registration
-    in either mode. Supply a real VHD for full end-to-end testing (Arc agent, Guest Management).
+    Full path to an existing Windows Server VHDX to use as the test VM disk.
+    Use this if -GalleryImageName resolution fails, or to specify an exact file.
+    If neither -GalleryImageName nor -SourceVhdPath is set, an empty VHD is created.
 
 .PARAMETER SkipSetup
     Skip the New-HydrationTestVM step. Use when the VM already exists.
@@ -108,6 +116,9 @@ param(
     [int]$Generation = 2,
 
     [Parameter()]
+    [string]$GalleryImageName,
+
+    [Parameter()]
     [string]$SourceVhdPath,
 
     [Parameter()]
@@ -131,6 +142,25 @@ $failures = [System.Collections.Generic.List[string]]::new()
 
 function Record-Pass([string]$msg) { $script:passed++; Write-TestPass $msg }
 function Record-Fail([string]$msg) { $script:failed++; $script:failures.Add($msg); Write-TestFail $msg }
+
+#region ── Resolve VHD Source ─────────────────────────────────────────────────
+
+# Gallery image takes precedence; fall back to explicit SourceVhdPath; then empty VHD
+if ($GalleryImageName -and -not $SkipSetup) {
+    $resolvedPath = Get-GalleryImagePath `
+        -ImageName       $GalleryImageName `
+        -ResourceGroup   $ResourceGroup `
+        -StorageRootPath $StorageRootPath
+    if ($resolvedPath) {
+        $SourceVhdPath = $resolvedPath
+        Write-Host "  Using gallery image: $GalleryImageName" -ForegroundColor Cyan
+        Write-Host "  Local path         : $SourceVhdPath"    -ForegroundColor Cyan
+    } else {
+        Write-Host "  [WARN] Could not resolve gallery image '$GalleryImageName' — falling back to empty VHD." -ForegroundColor Yellow
+    }
+}
+
+#endregion
 
 Write-TestBanner "Hydration Integration Test"
 
