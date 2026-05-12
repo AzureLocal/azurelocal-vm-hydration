@@ -1,110 +1,155 @@
-# CLAUDE.md
+# azurelocal-vm-hydration — Claude Code Context
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## What this repo is
 
-## What This Repo Is
+![Azure Local VM Hydration — Revive. Reconnect. Reclaim.](docs/assets/images/azurelocal-vm-hydration-banner.svg)
 
-**azurelocal-vm-hydration** automates the process of reconnecting or adopting existing Hyper-V VMs into the Azure Local control plane — making unmanaged VMs visible and manageable as `Microsoft.AzureStackHCI/virtualMachineInstances` resources in Azure, without re-imaging or Sysprepping the VM.
+---
 
-Two operations are covered:
+## ADO project details
 
-- **VM Hydration** — onboarding an existing unmanaged Hyper-V VM *in place* into Azure Local management using `az stack-hci-vm disk create-from-local`
-- **VM Reconnect** — restoring a VM to a *different* Azure Local cluster and re-projecting it into Azure using `az stack-hci-vm reconnect-to-azure`
+- **ADO org:** https://dev.azure.com/hybridcloudsolutions
+- **ADO project:** Azure Local
+- **Area path:** Platform Engineering\Onboarding
+- **Work item format:** `AB#<id>` in commit messages and PR descriptions
 
-This is a **two-part repo**: standalone scripts that can be run directly on a cluster node, AND a PSGallery-publishable PowerShell module. Both parts implement the same logic; the module wraps everything in proper cmdlets for `Install-Module` workflows.
+---
 
-## PowerShell Module
+## Standards
 
-```text
-AzureLocalVMHydration.psm1            # Root module — dot-sources Private + Public
-AzureLocalVMHydration.psd1            # Manifest (v0.1.0, GUID 83e5c34f, PS 7.0+, PSGallery-ready)
-Modules/
-├── Private/
-│   ├── Common-Functions.ps1          # Write-Step/OK/Warn/Fail, Invoke-AzCli, Invoke-ArmRestApi,
-│   │                                 #   Assert-AdminElevation
-│   └── Test-HydrationPrerequisites.ps1  # Internal 10-check pre-flight (returns List[string])
-└── Public/
-    ├── Invoke-VMHydration.ps1        # Exported: hydrate unmanaged VM in-place (Gen1 + Gen2)
-    ├── Invoke-VMReconnect.ps1        # Exported: reconnect VM after cross-cluster restore
-    └── Test-VMHydrationPrerequisites.ps1  # Exported: bool-returning pre-flight wrapper
-```
+This repo follows all HCS platform standards defined in the Platform Engineering repo:
 
-Exported functions: `Invoke-VMHydration`, `Invoke-VMReconnect`, `Test-VMHydrationPrerequisites`
-
-Module uses `Assert-AdminElevation` (throws if not elevated) instead of `#Requires -RunAsAdministrator`.
-Module uses `throw` instead of `exit 1` — appropriate for module error handling.
-Both cmdlets support `-WhatIf` (`[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]`).
-
-## Scripts
-
-```text
-scripts/
-├── helpers/
-│   ├── Common-Functions.ps1           # Shared logging and Azure CLI wrappers
-│   └── Test-HydrationPrerequisites.ps1  # Pre-flight checks (dot-sourced by both main scripts)
-├── Invoke-VMHydration.ps1             # Hydrate unmanaged VM in-place (Gen1 + Gen2)
-└── Invoke-VMReconnect.ps1             # Reconnect VM after cross-cluster restore
-```
-
-Both main scripts support `-WhatIf` for dry runs and `#Requires -RunAsAdministrator`.
-Both dot-source the helpers at runtime — no module install required.
-
-## Reference Materials (Read These First)
-
-`reference/` contains two critical research documents — read them before writing any automation:
-
-- **`reference/AzureLocalVMReconnectPrivatePreview_02232026.md`** — Microsoft's Private Preview runbook (converted from PDF). Defines the official 5-step procedure: prerequisites → remove NICs → hydrate data disks → reconnect VM → attach NIC. Key commands: `az stack-hci-vm disk create-from-local` and `az stack-hci-vm reconnect-to-azure --yes`.
-
-- **`reference/hybridcore-vm-adoption-research.md`** — Community reverse-engineering of undocumented `stack-hci-vm` CLI subcommands. Covers Gen2 adoption, bulk automation scripting, and Gen1 adoption (which requires direct ARM REST API calls because the CLI lacks `hyperVGeneration` support). The Hybridcore "disk swap" technique is mechanically equivalent to Microsoft's `disk create-from-local` hydration.
-
-## Key Technical Constraints
-
-These are hard architectural requirements that apply to all scripts in this repo:
-
-- **GUID folder** — all VM files must reside inside the storage path GUID subfolder (e.g., `C:\ClusterStorage\Volume1\e21794969177373\`). Azure Local will not adopt a VM whose files are outside this folder. Validate with `Get-VM | fl ConfigurationLocation`.
-- **HA-VM requirement** — VMs must be configured as highly available in Failover Cluster Manager before reconnect. Most backup tools restore as standard Hyper-V VMs; HA configuration is a required pre-step.
-- **Gen1 vs Gen2** — Gen2 uses the Azure CLI. Gen1 requires the ARM REST API directly (`hyperVGeneration: V1`, `diskFileFormat: vhd`, `enable-secure-boot false`, `enable-vtpm false`).
-- **CLI version** — `stack-hci-vm` extension must be ≥ 1.11.9. Check with `az extension show --name stack-hci-vm --query version`.
-- **Azure Local version** — nodes must be 2602+. On 2601, guest management must be enabled *before* reconnect (can't be added post-reconnect on that version).
-- **KVP integration service** — Hyper-V Data Exchange Service (Key-Value Pair Exchange) must be enabled in the VM before reconnect.
-- **Failed reconnect — do not delete** — if `reconnect-to-azure` fails, never delete the Azure resource. Fix the root cause and re-run the command to repair it. Deletion can destroy the original VM.
-
-## Configuration
-
-Copy `config/variables.example.yml` to `config/variables.yml` and fill in values. `variables.yml` is gitignored — never commit it. Secrets use `keyvault://` URIs resolved at deploy time.
-
-Schema: `config/schema/variables.schema.json`
-
-## Docs Site
-
-Built with MkDocs Material. Deploys to GitHub Pages on push to `main` when `docs/` or `mkdocs.yml` changes.
-
-```bash
-pip install mkdocs-material
-mkdocs serve          # local dev server at http://127.0.0.1:8000
-mkdocs build --strict # same check CI runs
-```
-
-## Commit Conventions
-
-Conventional Commits — release-please generates `CHANGELOG.md` and cuts releases automatically.
-
-| Type | When |
+| Standard | Reference |
 |---|---|
-| `feat` | New script, command, or capability |
-| `fix` | Bug fix |
-| `docs` | Docs only |
-| `infra` | CI/CD, workflows, config |
-| `chore` | Maintenance |
-| `refactor` | Restructure, no behavior change |
-| `test` | Tests only |
+| Governance | [docs/standards/governance.md](https://dev.azure.com/hybridcloudsolutions/Platform%20Engineering/_git/Platform%20Engineering?path=/docs/standards/governance.md) |
+| Scripting (PowerShell 7) | [docs/standards/scripting.md](https://dev.azure.com/hybridcloudsolutions/Platform%20Engineering/_git/Platform%20Engineering?path=/docs/standards/scripting.md) |
+| Automation | [docs/standards/automation.md](https://dev.azure.com/hybridcloudsolutions/Platform%20Engineering/_git/Platform%20Engineering?path=/docs/standards/automation.md) |
+| Variables and naming | [docs/standards/variables.md](https://dev.azure.com/hybridcloudsolutions/Platform%20Engineering/_git/Platform%20Engineering?path=/docs/standards/variables.md) |
+| Documentation | [docs/standards/documentation.md](https://dev.azure.com/hybridcloudsolutions/Platform%20Engineering/_git/Platform%20Engineering?path=/docs/standards/documentation.md) |
+| Claude Code | [docs/standards/claude-code.md](https://dev.azure.com/hybridcloudsolutions/Platform%20Engineering/_git/Platform%20Engineering?path=/docs/standards/claude-code.md) |
 
-Branch names: `feat/<name>`, `fix/<name>`, `docs/<name>`
+Key rules:
+- All scripts: PowerShell 7+ only. `#Requires -Version 7.0`, `Set-StrictMode -Version Latest`, ` $ErrorActionPreference = 'Stop'`.
+- All docs: Markdown only. No Word documents in any repo.
+- Commit format: `type(scope): short description` — types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`
+- No secrets, tokens, or credentials committed to any file.
 
-## CI Workflows
+---
 
-| Workflow | Trigger | What it does |
+## Key facts
+
+| Fact | Value |
+|---|---|
+| Primary language | Markdown / Python (MkDocs) |
+| GitHub org | AzureLocal |
+| Azure login | kris@hybridsolutions.cloud |
+| Key Vault | kv-hcs-vault-01 |
+
+### Environment variables expected
+
+| Variable | Source | Purpose |
 |---|---|---|
-| `deploy-docs.yml` | Push to `main` (docs/** or mkdocs.yml) | Builds and deploys MkDocs site to GitHub Pages |
-| `validate-repo-structure.yml` | PR to `main` | Checks required root files and directories exist |
-| `release-please.yml` | Push to `main` | Opens/updates release PR; cuts tags on merge |
+| `GITHUB_TOKEN` | kv-hcs-vault-01 via Load-HCSEnvironment.ps1 | GitHub CLI and git operations |
+| `AZURE_DEVOPS_EXT_PAT` | kv-hcs-vault-01 via Load-HCSEnvironment.ps1 | ADO CLI (`az boards`, `az devops`) |
+Load before starting a session:
+```powershell
+. E:\git\platform\scripts\Load-HCSEnvironment.ps1
+```
+
+### Build and test commands
+
+```
+mkdocs build
+mkdocs serve  # http://127.0.0.1:8000
+```
+
+---
+
+## Repo structure
+
+```
+azurelocal-vm-hydration/
+├── .claude/
+    └── settings.json
+├── .github/
+    ├── ISSUE_TEMPLATE/
+    ├── workflows/
+    ├── CODEOWNERS
+    └── PULL_REQUEST_TEMPLATE.md
+├── config/
+    ├── schema/
+    └── variables.example.yml
+├── docs/
+    ├── assets/
+    ├── contributing.md
+    ├── getting-started.md
+    ├── index.md
+    └── module.md
+├── Modules/
+    ├── Private/
+    └── Public/
+├── repo-management/
+    ├── automation.md
+    ├── README.md
+    └── setup.md
+├── scripts/
+    ├── helpers/
+    ├── .gitkeep
+    ├── Invoke-VMHydration.ps1
+    └── Invoke-VMReconnect.ps1
+├── src/
+    └── .gitkeep
+├── tests/
+    ├── helpers/
+    ├── hydration/
+    ├── reconnect/
+    ├── .gitkeep
+    └── test-variables.example.yml
+├── .azurelocal-platform.yml
+├── .editorconfig
+├── .gitignore
+├── .markdownlint.json
+├── .release-please-manifest.json
+├── .yamllint.yml
+├── AzureLocalVMHydration.psd1
+├── AzureLocalVMHydration.psm1
+├── CHANGELOG.md
+└── ...
+```
+
+---
+
+## Claude Code actions
+
+**Run autonomously:**
+- Read, search, and grep any file in this repo
+- Write and edit files in this repo
+- `git add`, `git commit`, `git push`
+- `gh issue`, `gh pr`, `gh run` CLI commands
+- `mkdocs build` and `mkdocs serve`
+- `pip install` for MkDocs plugins
+
+**Always confirm before:**
+- Creating or deleting Azure resources
+- Any `az` CLI write operation that modifies Azure state
+- Running destructive operations
+- Making API calls to external services
+
+
+---
+
+## Subagents available in this repo
+
+- `azurelocal-vm-hydration-engineer` (model: sonnet) — Expert in `azurelocal-vm-hydration`: deep knowledge of this repo's structure, conventions, and development workflow.
+
+User-level agents (available in every repo session): `triage-lookup`, `markdown-prose-editor`, `azurelocal-domain-expert`, `mkdocs-material-doctor`, `turner-module-scaffold-engineer`, `mms-2026-demo-presenter`.
+
+---
+
+## Owner
+
+**Kristopher Turner**
+kris@hybridsolutions.cloud
+Senior Product Technology Architect, TierPoint | Microsoft MVP (Azure) | MCT
+Owner, Hybrid Cloud Solutions LLC — hybridsolutions.cloud
+Country Cloud Boy — thisismydemo.cloud
