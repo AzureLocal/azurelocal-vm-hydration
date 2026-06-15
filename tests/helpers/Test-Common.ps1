@@ -484,6 +484,15 @@ function Invoke-TestRemotely {
         [pscredential]$Credential
     )
 
+    # Ensure the node is in TrustedHosts so NTLM works from non-domain machines.
+    # Kerberos ignores TrustedHosts, so this is harmless for domain-joined jump boxes.
+    $currentTrusted = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
+    if ($currentTrusted -ne '*' -and $currentTrusted -notmatch [regex]::Escape($ComputerName)) {
+        $newValue = if ($currentTrusted) { "$currentTrusted,$ComputerName" } else { $ComputerName }
+        Set-Item WSMan:\localhost\Client\TrustedHosts -Value $newValue -Force -ErrorAction Stop
+        Write-Host "  [REMOTE] Added '$ComputerName' to WinRM TrustedHosts" -ForegroundColor Cyan
+    }
+
     $sessionParams = @{ ComputerName = $ComputerName }
     if ($Credential) { $sessionParams['Credential'] = $Credential }
 

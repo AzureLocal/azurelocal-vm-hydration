@@ -108,3 +108,7 @@ Branch names: `feat/<name>`, `fix/<name>`, `docs/<name>`
 | `deploy-docs.yml` | Push to `main` (docs/** or mkdocs.yml) | Builds and deploys MkDocs site to GitHub Pages |
 | `validate-repo-structure.yml` | PR to `main` | Checks required root files and directories exist |
 | `release-please.yml` | Push to `main` | Opens/updates release PR; cuts tags on merge |
+
+## Subagents available in this repo
+
+- `vm-hydration-engineer` (model: sonnet) — PowerShell module and scripts for VM hydration and reconnect on Azure Local; knows GUID folder constraints, Gen1/Gen2 differences, and PSGallery publish flow

@@ -155,6 +155,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if ($ComputerName) {
+    $currentTrusted = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
+    if ($currentTrusted -ne '*' -and $currentTrusted -notmatch [regex]::Escape($ComputerName)) {
+        $newValue = if ($currentTrusted) { "$currentTrusted,$ComputerName" } else { $ComputerName }
+        Set-Item WSMan:\localhost\Client\TrustedHosts -Value $newValue -Force -ErrorAction Stop
+        Write-Host "  Added '$ComputerName' to WinRM TrustedHosts (enables NTLM from non-domain machines)" -ForegroundColor Cyan
+    }
     $sessionParams = @{ ComputerName = $ComputerName }
     if ($Credential) { $sessionParams['Credential'] = $Credential }
     Write-Host "  Connecting to $ComputerName ..." -ForegroundColor Cyan

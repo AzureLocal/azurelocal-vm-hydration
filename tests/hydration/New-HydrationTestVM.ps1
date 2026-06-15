@@ -42,6 +42,13 @@
     Hyper-V virtual switch to connect the VM to. If not specified, no NIC is attached
     (the hydration script will create the Azure NIC separately).
 
+.PARAMETER ComputerName
+    Name or IP address of a remote Azure Local cluster node. The scripts are copied and
+    executed there via WinRM. Nothing is permanently installed on the remote node.
+
+.PARAMETER Credential
+    PSCredential for the WinRM session. Omit to use current user credentials.
+
 .EXAMPLE
     # Azure resource layer test only (no OS needed):
     $ctx = .\New-HydrationTestVM.ps1 -StorageRootPath 'C:\ClusterStorage\Volume1'
@@ -53,7 +60,7 @@
         -SourceVhdPath   'C:\ClusterStorage\Volume1\ISOs\WS2022_template.vhdx'
 
 .NOTES
-    Run on one of the Azure Local cluster nodes.
+    Run on one of the Azure Local cluster nodes, or remotely via -ComputerName.
     After this script completes, run Invoke-HydrationTest.ps1 to execute the test.
     Run Remove-HydrationTestResources.ps1 to clean up after testing.
 #>
@@ -76,7 +83,13 @@ param(
     [string]$SourceVhdPath,
 
     [Parameter()]
-    [string]$SwitchName
+    [string]$SwitchName,
+
+    [Parameter()]
+    [string]$ComputerName,
+
+    [Parameter()]
+    [pscredential]$Credential
 )
 
 Set-StrictMode -Version Latest
@@ -84,6 +97,16 @@ $ErrorActionPreference = 'Stop'
 
 $TestDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 . "$TestDir\helpers\Test-Common.ps1"
+
+if ($ComputerName) {
+    $repoRoot   = Split-Path -Parent $TestDir
+    $passParams = @{} + $PSBoundParameters
+    $null = $passParams.Remove('ComputerName')
+    $null = $passParams.Remove('Credential')
+    Invoke-TestRemotely -ComputerName $ComputerName -ScriptPath $MyInvocation.MyCommand.Path `
+        -RepoRoot $repoRoot -Parameters $passParams -Credential $Credential
+    return
+}
 
 if (-not $VMName) {
     $VMName = "test-hydration-$(Get-Date -Format 'yyyyMMddHHmmss')"
