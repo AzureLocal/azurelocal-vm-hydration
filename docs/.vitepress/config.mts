@@ -7,21 +7,10 @@ export default defineConfig({
   description: "Governed centrally by HCS Platform Engineering standards",
   themeConfig: {
     logo: '/assets/images/azurelocal-vm-hydration-icon.svg',
-    nav: [
-      { text: 'Home', link: '/' },
-      { text: 'Architecture', link: '/architecture' },
-      { text: 'Runbooks', link: '/runbooks' }
-    ],
-    sidebar: [
-      {
-        text: 'Overview',
-        items: [
-          { text: 'Introduction', link: '/' }
-        ]
-      }
-    ],
+    nav: [{"link":"/","text":"Home"},{"link":"/getting-started","text":"Getting Started"},{"link":"/module","text":"Module Reference"},{"link":"/roadmap","text":"Roadmap"},{"link":"/contributing","text":"Contributing"}],
+    sidebar: [{"link":"/","text":"Home"},{"link":"/getting-started","text":"Getting Started"},{"link":"/module","text":"Module Reference"},{"link":"/roadmap","text":"Roadmap"},{"link":"/contributing","text":"Contributing"}],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/AzureLocal' }
+      { icon: 'github', link: 'https://github.com/AzureLocal/azurelocal-vm-hydration' }
     ],
     footer: {
       message: 'Released under the MIT License.',
@@ -29,6 +18,7 @@ export default defineConfig({
     }
   }
 })
+
 
 
 
