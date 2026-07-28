@@ -154,11 +154,12 @@ Invoke-VMReconnect `
     -RemoveSourceVM
 ```
 
-!!! danger "If Reconnect Fails"
-    **Do NOT delete the VM resource from the Azure portal or CLI.**
-    A VM resource may be created in a failed state. Deleting it can destroy the original VM.
-    Fix the root cause, then re-run `Invoke-VMReconnect` to repair it.
-
+> [!CAUTION]
+> **If Reconnect Fails**
+> **Do NOT delete the VM resource from the Azure portal or CLI.**
+> A VM resource may be created in a failed state. Deleting it can destroy the original VM.
+> Fix the root cause, then re-run `Invoke-VMReconnect` to repair it.
+>
 ---
 
 ## Test-VMHydrationPrerequisites
